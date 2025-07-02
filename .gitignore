@@ -33,3 +33,6 @@ log.md
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# cursor
+.cursor/

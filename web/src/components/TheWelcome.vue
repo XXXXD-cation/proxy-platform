@@ -10,20 +10,20 @@ const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
 </script>
 
 <template>
-  <WelcomeItem>
+  <welcome-item>
     <template #icon>
-      <DocumentationIcon />
+      <documentation-icon />
     </template>
     <template #heading>Documentation</template>
 
     Vue’s
     <a href="https://vuejs.org/" target="_blank" rel="noopener">official documentation</a>
     provides you with all information you need to get started.
-  </WelcomeItem>
+  </welcome-item>
 
-  <WelcomeItem>
+  <welcome-item>
     <template #icon>
-      <ToolingIcon />
+      <tooling-icon />
     </template>
     <template #heading>Tooling</template>
 
@@ -32,8 +32,9 @@ const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
     recommended IDE setup is
     <a href="https://code.visualstudio.com/" target="_blank" rel="noopener">VSCode</a>
     +
-    <a href="https://github.com/vuejs/language-tools" target="_blank" rel="noopener">Vue - Official</a>. If
-    you need to test your components and web pages, check out
+    <a href="https://github.com/vuejs/language-tools" target="_blank" rel="noopener"
+      >Vue - Official</a
+    >. If you need to test your components and web pages, check out
     <a href="https://vitest.dev/" target="_blank" rel="noopener">Vitest</a>
     and
     <a href="https://www.cypress.io/" target="_blank" rel="noopener">Cypress</a>
@@ -45,11 +46,11 @@ const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
     More instructions are available in
     <a href="javascript:void(0)" @click="openReadmeInEditor"><code>README.md</code></a
     >.
-  </WelcomeItem>
+  </welcome-item>
 
-  <WelcomeItem>
+  <welcome-item>
     <template #icon>
-      <EcosystemIcon />
+      <ecosystem-icon />
     </template>
     <template #heading>Ecosystem</template>
 
@@ -61,11 +62,11 @@ const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
     you need more resources, we suggest paying
     <a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">Awesome Vue</a>
     a visit.
-  </WelcomeItem>
+  </welcome-item>
 
-  <WelcomeItem>
+  <welcome-item>
     <template #icon>
-      <CommunityIcon />
+      <community-icon />
     </template>
     <template #heading>Community</template>
 
@@ -79,16 +80,16 @@ const openReadmeInEditor = () => fetch('/__open-in-editor?file=README.md')
     Bluesky account or the
     <a href="https://x.com/vuejs" target="_blank" rel="noopener">@vuejs</a>
     X account for latest news in the Vue world.
-  </WelcomeItem>
+  </welcome-item>
 
-  <WelcomeItem>
+  <welcome-item>
     <template #icon>
-      <SupportIcon />
+      <support-icon />
     </template>
     <template #heading>Support Vue</template>
 
     As an independent project, Vue relies on community backing for its sustainability. You can help
     us by
     <a href="https://vuejs.org/sponsor/" target="_blank" rel="noopener">becoming a sponsor</a>.
-  </WelcomeItem>
+  </welcome-item>
 </template>

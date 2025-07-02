@@ -1,26 +1,30 @@
- # 前端开发环境 Dockerfile
-FROM node:18-alpine
+# 使用官方Node.js镜像作为基础镜像
+FROM node:22-alpine
 
 # 设置工作目录
 WORKDIR /app
 
+# 设置npm使用淘宝镜像源
+RUN npm config set registry https://registry.npmmirror.com
+
 # 更换Alpine镜像源为中科大镜像
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
-
-# 安装基础工具
-RUN apk add --no-cache git
 
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
 # 安装依赖
-RUN npm install
+RUN npm ci
 
-# 复制源代码
+# 复制项目文件
 COPY . .
 
 # 暴露端口
 EXPOSE 5173
 
+# 设置Vite的开发服务器监听所有接口
+ENV VITE_HOST=0.0.0.0
+ENV VITE_PORT=5173
+
 # 启动开发服务器
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"] 
