@@ -1,0 +1,123 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 技术栈规范和最佳实践
+
+## 后端技术栈
+
+### 核心框架
+- **Go 1.24+** - 主要编程语言，用于高性能服务开发
+- **Gin Web Framework** - HTTP Web框架，用于API开发
+- **GORM** - ORM框架，用于数据库操作
+- **go-redis/redis/v9** - Redis客户端库
+- **mysql驱动** - MySQL数据库连接
+
+### 关键依赖库
+```go
+// HTTP客户端和代理
+github.com/gin-gonic/gin
+github.com/go-resty/resty/v2
+
+// 爬虫相关
+github.com/gocolly/colly/v2
+github.com/PuerkitoBio/goquery
+
+// 认证和安全
+github.com/golang-jwt/jwt/v5
+golang.org/x/crypto/bcrypt
+
+// 配置和日志
+github.com/spf13/viper
+github.com/sirupsen/logrus
+
+// 监控
+github.com/prometheus/client_golang
+```
+
+### 项目结构
+```
+services/
+├── gateway/          # 网关服务 - HTTP代理和HTTPS隧道
+├── proxy-pool/       # 代理池服务 - 智能调度和质量评分
+├── admin-api/        # 管理API - 用户管理和统计分析
+└── free-proxy-crawler/ # 免费代理爬虫服务
+
+pkg/
+├── config/          # 配置管理
+├── logger/          # 日志管理  
+├── redis/           # Redis客户端封装
+├── mysql/           # MySQL客户端封装
+├── auth/            # 认证和安全
+└── utils/           # 通用工具函数
+```
+
+## 前端技术栈
+
+### 核心框架
+- **Vue.js 3** - 主要前端框架，使用Composition API
+- **Element Plus** - UI组件库
+- **TypeScript** - 类型安全和代码质量
+- **Vue Router 4** - 路由管理
+- **Pinia** - 状态管理
+
+### 项目结构
+```
+web/
+├── src/
+│   ├── components/  # 通用组件
+│   ├── views/       # 页面组件
+│   ├── router/      # 路由配置
+│   ├── store/       # 状态管理
+│   ├── api/         # API调用封装
+│   └── utils/       # 工具函数
+└── public/          # 静态资源
+```
+
+## 数据存储
+
+### MySQL 8.0+
+- **主要用途**: 用户数据、订阅信息、API密钥等持久化存储
+- **连接池**: 使用GORM连接池管理
+- **迁移**: 使用GORM AutoMigrate进行数据库结构管理
+
+### Redis 6.2+
+- **主要用途**: 缓存、会话存储、代理池数据
+- **数据结构**: Hash、Set、Sorted Set、String
+- **命名空间**: 使用前缀区分不同业务数据
+
+## 基础设施
+
+### 容器化
+- **Docker** - 服务容器化
+- **Docker Compose** - 本地开发和部署编排
+- **Nginx** - 反向代理和负载均衡
+
+### 监控和日志
+- **Prometheus** - 指标收集和存储
+- **Grafana** - 可视化监控面板
+- **结构化日志** - JSON格式日志输出
+
+## 开发工具
+
+### 代码质量
+- **golangci-lint** - Go代码静态分析
+- **ESLint + Prettier** - 前端代码检查和格式化
+- **单元测试** - 要求覆盖率 >80%
+
+### API文档
+- **Swagger/OpenAPI 3.0** - API文档自动生成
+- **Postman Collection** - API测试集合
+
+## 第三方集成
+
+### 代理服务商
+- **Bright Data** - 主要商业代理供应商
+- **免费代理站点** - 多个免费代理获取源
+
+### 支付网关
+- **支付宝** - 支付宝开放平台API
+- **微信支付** - 微信支付商户API
+
+参考技术选型详情: [docs/MVP技术选型文档.md](mdc:docs/MVP技术选型文档.md)

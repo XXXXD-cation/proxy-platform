@@ -1,0 +1,26 @@
+ # 前端开发环境 Dockerfile
+FROM node:18-alpine
+
+# 设置工作目录
+WORKDIR /app
+
+# 更换Alpine镜像源为中科大镜像
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+
+# 安装基础工具
+RUN apk add --no-cache git
+
+# 复制package.json和package-lock.json
+COPY package*.json ./
+
+# 安装依赖
+RUN npm install
+
+# 复制源代码
+COPY . .
+
+# 暴露端口
+EXPOSE 5173
+
+# 启动开发服务器
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,84 @@
+ global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'proxy-platform'
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 网关服务监控
+  - job_name: 'gateway'
+    static_configs:
+      - targets: ['gateway:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # 代理池服务监控
+  - job_name: 'proxy-pool'
+    static_configs:
+      - targets: ['proxy-pool:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # 管理API服务监控
+  - job_name: 'admin-api'
+    static_configs:
+      - targets: ['admin-api:8082']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # 免费代理爬虫监控
+  - job_name: 'free-crawler'
+    static_configs:
+      - targets: ['free-crawler:8083']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Nginx监控
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # MySQL监控 (如果安装了mysqld_exporter)
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+    scrape_interval: 30s
+
+  # Redis监控 (如果安装了redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # Node监控 (系统指标)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+# 告警规则配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# 可选的远程写入配置
+# remote_write:
+#   - url: "http://remote-storage:8086/api/v1/prom/write"
+
+# 可选的远程读取配置
+# remote_read:
+#   - url: "http://remote-storage:8086/api/v1/prom/read"

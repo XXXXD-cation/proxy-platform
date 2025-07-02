@@ -1,0 +1,461 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# API设计规范和接口标准
+
+## RESTful API设计原则
+
+### URL设计规范
+```
+# 资源命名：使用名词，避免动词
+GET    /api/v1/users           # 获取用户列表
+GET    /api/v1/users/{id}      # 获取特定用户
+POST   /api/v1/users           # 创建用户
+PUT    /api/v1/users/{id}      # 更新用户
+DELETE /api/v1/users/{id}      # 删除用户
+
+# 嵌套资源
+GET    /api/v1/users/{id}/keys # 获取用户的API密钥
+POST   /api/v1/users/{id}/keys # 为用户创建API密钥
+```
+
+### HTTP状态码标准
+```
+200 OK              # 请求成功
+201 Created         # 资源创建成功
+204 No Content      # 请求成功，无返回内容
+400 Bad Request     # 请求参数错误
+401 Unauthorized    # 未授权
+403 Forbidden       # 已授权但无权限
+404 Not Found       # 资源不存在
+429 Too Many Requests # 请求过于频繁
+500 Internal Server Error # 服务器内部错误
+```
+
+### 响应格式规范
+```json
+// 成功响应
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "username": "testuser",
+    "email": "test@example.com"
+  },
+  "message": "User retrieved successfully"
+}
+
+// 错误响应
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "Username is required",
+    "details": {
+      "field": "username",
+      "value": ""
+    }
+  },
+  "request_id": "req-12345"
+}
+
+// 分页响应
+{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 150,
+    "total_pages": 8
+  }
+}
+```
+
+## 核心API接口设计
+
+### 用户认证API
+```go
+// 用户注册
+// POST /api/v1/auth/register
+type RegisterRequest struct {
+    Username string `json:"username" binding:"required,min=3,max=50"`
+    Email    string `json:"email" binding:"required,email"`
+    Password string `json:"password" binding:"required,min=8"`
+}
+
+type RegisterResponse struct {
+    User  User   `json:"user"`
+    Token string `json:"token"`
+}
+
+// 用户登录
+// POST /api/v1/auth/login
+type LoginRequest struct {
+    Email    string `json:"email" binding:"required,email"`
+    Password string `json:"password" binding:"required"`
+}
+
+type LoginResponse struct {
+    User         User   `json:"user"`
+    AccessToken  string `json:"access_token"`
+    RefreshToken string `json:"refresh_token"`
+    ExpiresIn    int64  `json:"expires_in"`
+}
+```
+
+### API密钥管理
+```go
+// 获取API密钥列表
+// GET /api/v1/keys
+type APIKeysResponse struct {
+    Keys []APIKey `json:"keys"`
+}
+
+// 创建API密钥
+// POST /api/v1/keys
+type CreateAPIKeyRequest struct {
+    Name        string   `json:"name" binding:"required"`
+    Permissions []string `json:"permissions"`
+    ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+type CreateAPIKeyResponse struct {
+    Key    APIKey `json:"key"`
+    Secret string `json:"secret"` // 只在创建时返回
+}
+```
+
+### 使用统计API
+```go
+// 获取使用统计
+// GET /api/v1/stats/usage?period=7d&group_by=day
+type UsageStatsRequest struct {
+    Period  string `form:"period" binding:"required"`  // 1d, 7d, 30d
+    GroupBy string `form:"group_by"`                   // hour, day, month
+}
+
+type UsageStatsResponse struct {
+    Period string      `json:"period"`
+    Stats  []UsageStat `json:"stats"`
+}
+
+type UsageStat struct {
+    Timestamp   time.Time `json:"timestamp"`
+    Requests    int64     `json:"requests"`
+    Traffic     int64     `json:"traffic"`      // bytes
+    SuccessRate float64   `json:"success_rate"` // 0.0-1.0
+}
+```
+
+## 代理服务接口设计
+
+### HTTP代理协议
+```go
+// HTTP代理请求处理
+func (g *Gateway) HandleHTTPProxy(c *gin.Context) {
+    // 1. 认证和授权
+    userCtx, err := g.authenticateRequest(c)
+    if err != nil {
+        c.JSON(401, gin.H{"error": "Unauthorized"})
+        return
+    }
+    
+    // 2. 获取目标URL
+    targetURL := c.Request.URL.String()
+    
+    // 3. 选择最佳代理
+    proxyReq := &ProxyRequest{
+        UserID:       userCtx.UserID,
+        TargetDomain: extractDomain(targetURL),
+        Method:       c.Request.Method,
+        GeoLocation:  userCtx.PreferredGeo,
+    }
+    
+    proxy, err := g.scheduler.SelectBestProxy(c, proxyReq)
+    if err != nil {
+        c.JSON(500, gin.H{"error": "No available proxy"})
+        return
+    }
+    
+    // 4. 转发请求
+    g.forwardRequest(c, proxy, targetURL)
+}
+```
+
+### HTTPS隧道协议
+```go
+// HTTPS CONNECT方法处理
+func (g *Gateway) HandleHTTPSConnect(c *gin.Context) {
+    // 1. 验证CONNECT请求
+    if c.Request.Method != "CONNECT" {
+        c.JSON(405, gin.H{"error": "Method not allowed"})
+        return
+    }
+    
+    // 2. 建立隧道连接
+    targetAddr := c.Request.Host
+    if !strings.Contains(targetAddr, ":") {
+        targetAddr += ":443"
+    }
+    
+    // 3. 选择代理并建立连接
+    tunnel, err := g.tunnelManager.CreateTunnel(c, targetAddr)
+    if err != nil {
+        c.JSON(500, gin.H{"error": "Tunnel creation failed"})
+        return
+    }
+    
+    // 4. 返回200 Connection established
+    c.Status(200)
+    c.Header("Proxy-Agent", "ProxyPlatform/1.0")
+    
+    // 5. 开始数据转发
+    g.tunnelManager.StartForwarding(tunnel)
+}
+```
+
+### 代理质量API
+```go
+// 获取代理质量信息
+// GET /api/v1/proxies/quality
+type ProxyQualityResponse struct {
+    Proxies []ProxyQuality `json:"proxies"`
+    Summary QualitySummary `json:"summary"`
+}
+
+type ProxyQuality struct {
+    IP           string    `json:"ip"`
+    Port         int       `json:"port"`
+    Country      string    `json:"country"`
+    QualityScore float64   `json:"quality_score"`
+    Latency      int       `json:"latency_ms"`
+    SuccessRate  float64   `json:"success_rate"`
+    LastChecked  time.Time `json:"last_checked"`
+}
+```
+
+## 中间件设计
+
+### 认证中间件
+```go
+func AuthMiddleware(authService *AuthService) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        var token string
+        
+        // 1. 从Header获取token
+        if auth := c.GetHeader("Authorization"); auth != "" {
+            if strings.HasPrefix(auth, "Bearer ") {
+                token = auth[7:]
+            }
+        }
+        
+        // 2. 从API Key获取
+        if token == "" {
+            if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
+                userCtx, err := authService.ValidateAPIKey(apiKey)
+                if err != nil {
+                    c.JSON(401, gin.H{"error": "Invalid API key"})
+                    c.Abort()
+                    return
+                }
+                c.Set("user_context", userCtx)
+                c.Next()
+                return
+            }
+        }
+        
+        // 3. 验证JWT token
+        if token == "" {
+            c.JSON(401, gin.H{"error": "Authorization required"})
+            c.Abort()
+            return
+        }
+        
+        userCtx, err := authService.ValidateToken(token)
+        if err != nil {
+            c.JSON(401, gin.H{"error": "Invalid token"})
+            c.Abort()
+            return
+        }
+        
+        c.Set("user_context", userCtx)
+        c.Next()
+    }
+}
+```
+
+### 限流中间件
+```go
+func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        userCtx := c.MustGet("user_context").(*UserContext)
+        
+        // 根据用户套餐设置限流
+        var limit int
+        switch userCtx.SubscriptionPlan {
+        case "developer":
+            limit = 100 // 100 requests per minute
+        case "professional":
+            limit = 1000
+        case "enterprise":
+            limit = 10000
+        }
+        
+        allowed := limiter.Allow(userCtx.UserID, limit, time.Minute)
+        if !allowed {
+            c.JSON(429, gin.H{
+                "error": "Rate limit exceeded",
+                "limit": limit,
+                "reset_at": time.Now().Add(time.Minute),
+            })
+            c.Abort()
+            return
+        }
+        
+        c.Next()
+    }
+}
+```
+
+### 监控中间件
+```go
+func MetricsMiddleware(metrics *prometheus.CounterVec) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        start := time.Now()
+        
+        c.Next()
+        
+        duration := time.Since(start)
+        status := strconv.Itoa(c.Writer.Status())
+        
+        // 记录指标
+        metrics.WithLabelValues(
+            c.Request.Method,
+            c.Request.URL.Path,
+            status,
+        ).Inc()
+        
+        // 记录响应时间
+        responseTimeHistogram.WithLabelValues(
+            c.Request.Method,
+            c.Request.URL.Path,
+        ).Observe(duration.Seconds())
+    }
+}
+```
+
+## WebSocket接口设计
+
+### 实时监控连接
+```go
+// WebSocket升级处理
+func (g *Gateway) HandleWebSocket(c *gin.Context) {
+    conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+    if err != nil {
+        return
+    }
+    defer conn.Close()
+    
+    userCtx := c.MustGet("user_context").(*UserContext)
+    
+    // 创建监控会话
+    session := &MonitorSession{
+        UserID: userCtx.UserID,
+        Conn:   conn,
+        Topics: make(map[string]bool),
+    }
+    
+    g.monitorManager.AddSession(session)
+    defer g.monitorManager.RemoveSession(session)
+    
+    // 处理客户端消息
+    for {
+        var msg MonitorMessage
+        if err := conn.ReadJSON(&msg); err != nil {
+            break
+        }
+        
+        g.handleMonitorMessage(session, &msg)
+    }
+}
+
+// 监控消息类型
+type MonitorMessage struct {
+    Type    string      `json:"type"`    // subscribe, unsubscribe
+    Topic   string      `json:"topic"`   // usage, proxies, errors
+    Payload interface{} `json:"payload"`
+}
+```
+
+## 错误处理规范
+
+### 统一错误处理
+```go
+// 错误类型定义
+type APIError struct {
+    Code    string `json:"code"`
+    Message string `json:"message"`
+    Details interface{} `json:"details,omitempty"`
+}
+
+// 全局错误处理中间件
+func ErrorHandler() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        c.Next()
+        
+        if len(c.Errors) > 0 {
+            err := c.Errors.Last()
+            
+            var apiErr APIError
+            switch e := err.Err.(type) {
+            case *ProxyError:
+                apiErr = APIError{
+                    Code:    "PROXY_ERROR",
+                    Message: e.Message,
+                    Details: map[string]interface{}{
+                        "proxy_ip": e.IP,
+                        "error_code": e.Code,
+                    },
+                }
+                c.JSON(502, gin.H{"success": false, "error": apiErr})
+            case *ValidationError:
+                apiErr = APIError{
+                    Code:    "VALIDATION_ERROR",
+                    Message: e.Message,
+                    Details: e.Fields,
+                }
+                c.JSON(400, gin.H{"success": false, "error": apiErr})
+            default:
+                apiErr = APIError{
+                    Code:    "INTERNAL_ERROR",
+                    Message: "Internal server error",
+                }
+                c.JSON(500, gin.H{"success": false, "error": apiErr})
+            }
+        }
+    }
+}
+```
+
+## API文档标准
+
+### Swagger注解示例
+```go
+// @Summary 获取用户信息
+// @Description 根据用户ID获取用户详细信息
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "用户ID"
+// @Success 200 {object} User
+// @Failure 404 {object} APIError
+// @Router /api/v1/users/{id} [get]
+func (h *UserHandler) GetUser(c *gin.Context) {
+    // 实现代码
+}
+```
+
+参考架构设计详情: [docs/系统架构设计文档.md](mdc:docs/系统架构设计文档.md)
