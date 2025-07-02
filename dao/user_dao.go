@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"proxy-platform/models"
+	"github.com/XXXXD-cation/proxy-platform/models"
 )
 
 // UserDAO 用户数据访问对象
