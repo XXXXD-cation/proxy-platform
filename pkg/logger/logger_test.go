@@ -191,14 +191,14 @@ func TestWithError(t *testing.T) {
 func TestGlobalLogMethods(t *testing.T) {
 	// 创建一个缓冲区来捕获日志输出
 	var buf bytes.Buffer
-	
+
 	// 重置并配置全局日志器
 	config := LogConfig{
 		Level:  "debug",
 		Format: "text",
 		Output: "stdout",
 	}
-	
+
 	logger, _ := New(config)
 	logger.SetOutput(&buf)
 	globalLogger = logger
@@ -352,4 +352,4 @@ type testError struct {
 
 func (e *testError) Error() string {
 	return e.msg
-} 
+}

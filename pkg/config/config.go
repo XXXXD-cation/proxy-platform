@@ -1,3 +1,4 @@
+// Package config 提供配置管理功能，支持从文件和环境变量加载配置
 package config
 
 import (
@@ -132,7 +133,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("Redis主机地址不能为空")
 	}
 	if c.Redis.Port <= 0 {
-		return fmt.Errorf("Redis端口配置无效: %d", c.Redis.Port)
+		return fmt.Errorf("redis端口配置无效: %d", c.Redis.Port)
 	}
 
 	// 验证日志配置
@@ -170,4 +171,4 @@ func (c *Config) GetRedisAddr() string {
 // GetServerAddr 获取服务器监听地址
 func (c *Config) GetServerAddr() string {
 	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
-} 
+}

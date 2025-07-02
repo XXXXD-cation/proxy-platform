@@ -2,20 +2,23 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
+
+issues:
+  exclude-dirs:
     - vendor
     - .git
     - deployments
     - docs
     - web
-  skip-files:
+  exclude-files:
     - ".*\\.pb\\.go$"
     - ".*_mock\\.go$"
 
 output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
+  formats:
+    - format: colored-line-number
+      print-issued-lines: true
+      print-linter-name: true
 
 linters-settings:
   errcheck:
@@ -23,7 +26,8 @@ linters-settings:
     check-blank: true
   
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
     
   gocyclo:
     min-complexity: 15
@@ -62,11 +66,24 @@ linters-settings:
     
   gocognit:
     min-complexity: 15
+    
+  depguard:
+    rules:
+      main:
+        files:
+          - $all
+        allow:
+          - $gostd
+          - github.com/XXXXD-cation/proxy-platform
+          - github.com/go-redis/redis/v8
+          - github.com/go-sql-driver/mysql
+          - github.com/sirupsen/logrus
+          - gopkg.in/yaml.v3
+          - gorm.io/gorm
 
 linters:
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     - dupl
@@ -78,34 +95,29 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
-    - gomnd
+    - revive
+    - mnd
     - goprintffuncname
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret
     - rowserrcheck
-    - scopelint
+    - exportloopref
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
     
   disable:
-    - maligned
     - prealloc
 
-issues:
   exclude-rules:
     # Exclude some linters from running on tests files
     - path: _test\.go

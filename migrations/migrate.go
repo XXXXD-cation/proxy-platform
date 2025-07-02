@@ -42,7 +42,11 @@ func migrateUp(dsn string) {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Warning: Failed to close database connection: %v", closeErr)
+		}
+	}()
 
 	fmt.Println("Executing database migrations...")
 
@@ -183,7 +187,11 @@ func migrateDown(dsn string) {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Warning: Failed to close database connection: %v", closeErr)
+		}
+	}()
 
 	fmt.Println("Rolling back database migrations...")
 

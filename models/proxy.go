@@ -8,25 +8,25 @@ import (
 
 // ProxyIP 代理IP模型
 type ProxyIP struct {
-	ID            uint                `gorm:"primarykey" json:"id"`
-	IPAddress     string              `gorm:"type:varchar(45);not null" json:"ip_address" validate:"required,ip"`
-	Port          int                 `gorm:"not null" json:"port" validate:"required,min=1,max=65535"`
-	ProxyType     ProxyType           `gorm:"type:enum('http','https','socks4','socks5');not null" json:"proxy_type"`
-	SourceType    ProxySourceType     `gorm:"type:enum('commercial','free');not null;index" json:"source_type"`
-	Provider      string              `gorm:"type:varchar(50);index" json:"provider"`
-	CountryCode   string              `gorm:"type:varchar(2);index" json:"country_code"`
-	QualityScore  float64             `gorm:"type:decimal(3,2);default:0.00;index" json:"quality_score"`
-	SuccessRate   float64             `gorm:"type:decimal(5,2);default:0.00" json:"success_rate"`
-	AvgLatencyMs  int                 `gorm:"default:0" json:"avg_latency_ms"`
-	IsActive      bool                `gorm:"default:true;index" json:"is_active"`
-	LastCheckedAt *time.Time          `json:"last_checked_at"`
-	CreatedAt     time.Time           `json:"created_at"`
-	UpdatedAt     time.Time           `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt      `gorm:"index" json:"-"`
+	ID            uint            `gorm:"primarykey" json:"id"`
+	IPAddress     string          `gorm:"type:varchar(45);not null" json:"ip_address" validate:"required,ip"`
+	Port          int             `gorm:"not null" json:"port" validate:"required,min=1,max=65535"`
+	ProxyType     ProxyType       `gorm:"type:enum('http','https','socks4','socks5');not null" json:"proxy_type"`
+	SourceType    ProxySourceType `gorm:"type:enum('commercial','free');not null;index" json:"source_type"`
+	Provider      string          `gorm:"type:varchar(50);index" json:"provider"`
+	CountryCode   string          `gorm:"type:varchar(2);index" json:"country_code"`
+	QualityScore  float64         `gorm:"type:decimal(3,2);default:0.00;index" json:"quality_score"`
+	SuccessRate   float64         `gorm:"type:decimal(5,2);default:0.00" json:"success_rate"`
+	AvgLatencyMs  int             `gorm:"default:0" json:"avg_latency_ms"`
+	IsActive      bool            `gorm:"default:true;index" json:"is_active"`
+	LastCheckedAt *time.Time      `json:"last_checked_at"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt  `gorm:"index" json:"-"`
 
 	// 关联关系
-	UsageLogs     []UsageLog          `gorm:"foreignKey:ProxyIP;references:IPAddress" json:"-"`
-	HealthChecks  []ProxyHealthCheck  `gorm:"foreignKey:ProxyIPID;constraint:OnDelete:CASCADE" json:"health_checks,omitempty"`
+	UsageLogs    []UsageLog         `gorm:"foreignKey:ProxyIP;references:IPAddress" json:"-"`
+	HealthChecks []ProxyHealthCheck `gorm:"foreignKey:ProxyIPID;constraint:OnDelete:CASCADE" json:"health_checks,omitempty"`
 }
 
 // ProxyType 代理类型
@@ -62,17 +62,17 @@ func (p *ProxyIP) IsHealthy() bool {
 	if !p.IsActive {
 		return false
 	}
-	
+
 	// 质量评分低于0.5认为不健康
 	if p.QualityScore < 0.5 {
 		return false
 	}
-	
+
 	// 成功率低于50%认为不健康
 	if p.SuccessRate < 50.0 {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -84,15 +84,15 @@ func (p *ProxyIP) UpdateQualityScore(latency int, success bool) {
 		// 延迟越低评分越高，最大5秒超时
 		latencyScore = max(0, (5000-float64(latency))/5000)
 	}
-	
+
 	successScore := 0.0
 	if success {
 		successScore = 1.0
 	}
-	
+
 	// 加权平均：延迟权重40%，成功率权重60%
 	newScore := (latencyScore*0.4 + successScore*0.6)
-	
+
 	// 与历史评分平滑融合
 	if p.QualityScore > 0 {
 		p.QualityScore = (p.QualityScore*0.7 + newScore*0.3)
@@ -103,15 +103,15 @@ func (p *ProxyIP) UpdateQualityScore(latency int, success bool) {
 
 // ProxyHealthCheck 代理健康检查记录
 type ProxyHealthCheck struct {
-	ID          uint           `gorm:"primarykey" json:"id"`
-	ProxyIPID   uint           `gorm:"not null;index" json:"proxy_ip_id"`
-	CheckType   string         `gorm:"type:varchar(20);not null" json:"check_type"` // ping, http, https
-	IsSuccess   bool           `json:"is_success"`
-	LatencyMs   int            `json:"latency_ms"`
-	ErrorMsg    string         `gorm:"type:text" json:"error_msg"`
-	CheckedAt   time.Time      `gorm:"not null;index" json:"checked_at"`
-	CreatedAt   time.Time      `json:"created_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID        uint           `gorm:"primarykey" json:"id"`
+	ProxyIPID uint           `gorm:"not null;index" json:"proxy_ip_id"`
+	CheckType string         `gorm:"type:varchar(20);not null" json:"check_type"` // ping, http, https
+	IsSuccess bool           `json:"is_success"`
+	LatencyMs int            `json:"latency_ms"`
+	ErrorMsg  string         `gorm:"type:text" json:"error_msg"`
+	CheckedAt time.Time      `gorm:"not null;index" json:"checked_at"`
+	CreatedAt time.Time      `json:"created_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// 关联关系
 	ProxyIP ProxyIP `gorm:"foreignKey:ProxyIPID;constraint:OnDelete:CASCADE" json:"proxy_ip,omitempty"`
@@ -158,17 +158,17 @@ func (ul *UsageLog) GetTrafficMB() float64 {
 
 // ProxyPool 代理池配置
 type ProxyPool struct {
-	ID              uint                `gorm:"primarykey" json:"id"`
-	Name            string              `gorm:"type:varchar(100);not null" json:"name"`
-	Description     string              `gorm:"type:text" json:"description"`
-	SourceType      ProxySourceType     `gorm:"type:enum('commercial','free');not null" json:"source_type"`
-	Priority        int                 `gorm:"default:1" json:"priority"`
-	MaxProxies      int                 `gorm:"default:100" json:"max_proxies"`
-	MinQualityScore float64             `gorm:"type:decimal(3,2);default:0.50" json:"min_quality_score"`
-	IsActive        bool                `gorm:"default:true" json:"is_active"`
-	CreatedAt       time.Time           `json:"created_at"`
-	UpdatedAt       time.Time           `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt      `gorm:"index" json:"-"`
+	ID              uint            `gorm:"primarykey" json:"id"`
+	Name            string          `gorm:"type:varchar(100);not null" json:"name"`
+	Description     string          `gorm:"type:text" json:"description"`
+	SourceType      ProxySourceType `gorm:"type:enum('commercial','free');not null" json:"source_type"`
+	Priority        int             `gorm:"default:1" json:"priority"`
+	MaxProxies      int             `gorm:"default:100" json:"max_proxies"`
+	MinQualityScore float64         `gorm:"type:decimal(3,2);default:0.50" json:"min_quality_score"`
+	IsActive        bool            `gorm:"default:true" json:"is_active"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt  `gorm:"index" json:"-"`
 }
 
 // TableName 指定表名
@@ -203,4 +203,4 @@ func max(a, b float64) float64 {
 		return a
 	}
 	return b
-} 
+}

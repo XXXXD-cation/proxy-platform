@@ -36,7 +36,7 @@ func TestBuildInsertSQL(t *testing.T) {
 	columns := []string{"name", "age", "email"}
 	sql := BuildInsertSQL("users", columns)
 	expected := "INSERT INTO users (name,age,email) VALUES (?,?,?)"
-	
+
 	if sql != expected {
 		t.Errorf("期望SQL: %s, 实际: %s", expected, sql)
 	}
@@ -53,7 +53,7 @@ func TestBuildUpdateSQL(t *testing.T) {
 	whereClause := "id = ?"
 	sql := BuildUpdateSQL("users", columns, whereClause)
 	expected := "UPDATE users SET name = ?,age = ? WHERE id = ?"
-	
+
 	if sql != expected {
 		t.Errorf("期望SQL: %s, 实际: %s", expected, sql)
 	}
@@ -80,7 +80,7 @@ func TestBuildSelectSQL(t *testing.T) {
 
 	sql := BuildSelectSQL("users", columns, whereClause, orderBy, limit)
 	expected := "SELECT name,age,email FROM users WHERE age > ? ORDER BY name ASC LIMIT 10"
-	
+
 	if sql != expected {
 		t.Errorf("期望SQL: %s, 实际: %s", expected, sql)
 	}
@@ -167,7 +167,7 @@ func TestMySQLClientStructure(t *testing.T) {
 
 func TestMySQLClientMethods(t *testing.T) {
 	// 由于这些方法需要真实的数据库连接，我们只测试方法签名和结构
-	
+
 	// 测试上下文创建
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -221,4 +221,4 @@ func TestBatchOperationParams(t *testing.T) {
 	if batchArgs[0][0] != "Alice" {
 		t.Error("第一行第一个参数错误")
 	}
-} 
+}

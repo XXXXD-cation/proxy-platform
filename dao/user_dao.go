@@ -1,3 +1,4 @@
+// Package dao 提供数据访问对象，用于数据库操作
 package dao
 
 import (
@@ -29,13 +30,13 @@ type UserDAOInterface interface {
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uint) error
-	
+
 	// 复杂查询
 	List(ctx context.Context, offset, limit int) ([]*models.User, error)
 	Count(ctx context.Context) (int64, error)
 	GetWithSubscriptions(ctx context.Context, id uint) (*models.User, error)
 	GetActiveUsers(ctx context.Context) ([]*models.User, error)
-	
+
 	// 业务相关
 	UpdateStatus(ctx context.Context, id uint, status models.UserStatusType) error
 	UpdateSubscriptionPlan(ctx context.Context, id uint, plan models.SubscriptionPlanType) error
@@ -46,7 +47,7 @@ func (dao *UserDAO) Create(ctx context.Context, user *models.User) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(user).Error
 }
 
@@ -94,7 +95,7 @@ func (dao *UserDAO) Update(ctx context.Context, user *models.User) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Save(user).Error
 }
 
@@ -187,7 +188,7 @@ func (dao *APIKeyDAO) Create(ctx context.Context, apiKey *models.APIKey) error {
 	if apiKey == nil {
 		return errors.New("api key cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(apiKey).Error
 }
 
@@ -222,7 +223,7 @@ func (dao *APIKeyDAO) Update(ctx context.Context, apiKey *models.APIKey) error {
 	if apiKey == nil {
 		return errors.New("api key cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Save(apiKey).Error
 }
 
@@ -274,7 +275,7 @@ func (dao *SubscriptionDAO) Create(ctx context.Context, subscription *models.Sub
 	if subscription == nil {
 		return errors.New("subscription cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(subscription).Error
 }
 
@@ -308,7 +309,7 @@ func (dao *SubscriptionDAO) Update(ctx context.Context, subscription *models.Sub
 	if subscription == nil {
 		return errors.New("subscription cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Save(subscription).Error
 }
 
@@ -340,4 +341,4 @@ func (dao *SubscriptionDAO) GetExpiringSubscriptions(ctx context.Context, days i
 		Where("is_active = ? AND expires_at BETWEEN ? AND ?", true, time.Now(), expiryDate).
 		Find(&subscriptions).Error
 	return subscriptions, err
-} 
+}

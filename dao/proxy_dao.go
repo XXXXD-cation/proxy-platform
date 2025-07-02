@@ -28,14 +28,14 @@ type ProxyDAOInterface interface {
 	GetByIPPort(ctx context.Context, ip string, port int) (*models.ProxyIP, error)
 	Update(ctx context.Context, proxy *models.ProxyIP) error
 	Delete(ctx context.Context, id uint) error
-	
+
 	// 查询操作
 	List(ctx context.Context, offset, limit int) ([]*models.ProxyIP, error)
 	GetActiveProxies(ctx context.Context, sourceType models.ProxySourceType) ([]*models.ProxyIP, error)
 	GetHealthyProxies(ctx context.Context, minQualityScore float64) ([]*models.ProxyIP, error)
 	GetByProvider(ctx context.Context, provider string) ([]*models.ProxyIP, error)
 	GetByCountry(ctx context.Context, countryCode string) ([]*models.ProxyIP, error)
-	
+
 	// 业务相关
 	UpdateQualityScore(ctx context.Context, id uint, score float64) error
 	UpdateSuccessRate(ctx context.Context, id uint, rate float64) error
@@ -50,7 +50,7 @@ func (dao *ProxyDAO) Create(ctx context.Context, proxy *models.ProxyIP) error {
 	if proxy == nil {
 		return errors.New("proxy cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(proxy).Error
 }
 
@@ -87,7 +87,7 @@ func (dao *ProxyDAO) Update(ctx context.Context, proxy *models.ProxyIP) error {
 	if proxy == nil {
 		return errors.New("proxy cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Save(proxy).Error
 }
 
@@ -111,11 +111,11 @@ func (dao *ProxyDAO) List(ctx context.Context, offset, limit int) ([]*models.Pro
 func (dao *ProxyDAO) GetActiveProxies(ctx context.Context, sourceType models.ProxySourceType) ([]*models.ProxyIP, error) {
 	var proxies []*models.ProxyIP
 	query := dao.db.WithContext(ctx).Where("is_active = ?", true)
-	
+
 	if sourceType != "" {
 		query = query.Where("source_type = ?", sourceType)
 	}
-	
+
 	err := query.Order("quality_score DESC").Find(&proxies).Error
 	return proxies, err
 }
@@ -196,11 +196,11 @@ func (dao *ProxyDAO) GetBestProxies(ctx context.Context, limit int, sourceType m
 	var proxies []*models.ProxyIP
 	query := dao.db.WithContext(ctx).
 		Where("is_active = ? AND quality_score >= ?", true, 0.7)
-	
+
 	if sourceType != "" {
 		query = query.Where("source_type = ?", sourceType)
 	}
-	
+
 	err := query.
 		Order("quality_score DESC, avg_latency_ms ASC").
 		Limit(limit).
@@ -232,9 +232,9 @@ type UsageLogDAOInterface interface {
 type UsageStats struct {
 	TotalRequests   int64   `json:"total_requests"`
 	SuccessRequests int64   `json:"success_requests"`
-	TotalTraffic    int64   `json:"total_traffic"`    // bytes
-	AvgLatency      float64 `json:"avg_latency"`      // ms
-	SuccessRate     float64 `json:"success_rate"`     // percentage
+	TotalTraffic    int64   `json:"total_traffic"` // bytes
+	AvgLatency      float64 `json:"avg_latency"`   // ms
+	SuccessRate     float64 `json:"success_rate"`  // percentage
 }
 
 // Create 创建使用日志
@@ -242,7 +242,7 @@ func (dao *UsageLogDAO) Create(ctx context.Context, log *models.UsageLog) error 
 	if log == nil {
 		return errors.New("usage log cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(log).Error
 }
 
@@ -261,7 +261,7 @@ func (dao *UsageLogDAO) GetByUserID(ctx context.Context, userID uint, offset, li
 // GetStatsByUserID 获取用户指定时间范围的统计
 func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint, startTime, endTime time.Time) (*UsageStats, error) {
 	var stats UsageStats
-	
+
 	// 计算总请求数和成功请求数
 	err := dao.db.WithContext(ctx).
 		Model(&models.UsageLog{}).
@@ -273,16 +273,16 @@ func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint, start
 		`).
 		Where("user_id = ? AND created_at BETWEEN ? AND ?", userID, startTime, endTime).
 		Scan(&stats).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 计算成功率
 	if stats.TotalRequests > 0 {
 		stats.SuccessRate = float64(stats.SuccessRequests) / float64(stats.TotalRequests) * 100
 	}
-	
+
 	return &stats, nil
 }
 
@@ -291,7 +291,7 @@ func (dao *UsageLogDAO) GetTodayStats(ctx context.Context, userID uint) (*UsageS
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
-	
+
 	return dao.GetStatsByUserID(ctx, userID, startOfDay, endOfDay)
 }
 
@@ -300,7 +300,7 @@ func (dao *UsageLogDAO) GetMonthlyStats(ctx context.Context, userID uint) (*Usag
 	now := time.Now()
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	endOfMonth := startOfMonth.AddDate(0, 1, 0)
-	
+
 	return dao.GetStatsByUserID(ctx, userID, startOfMonth, endOfMonth)
 }
 
@@ -327,7 +327,7 @@ func (dao *ProxyHealthCheckDAO) Create(ctx context.Context, check *models.ProxyH
 	if check == nil {
 		return errors.New("health check cannot be nil")
 	}
-	
+
 	return dao.db.WithContext(ctx).Create(check).Error
 }
 
@@ -348,4 +348,4 @@ func (dao *ProxyHealthCheckDAO) DeleteOldChecks(ctx context.Context, days int) e
 	return dao.db.WithContext(ctx).
 		Where("checked_at < ?", cutoffDate).
 		Delete(&models.ProxyHealthCheck{}).Error
-} 
+}

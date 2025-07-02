@@ -1,3 +1,4 @@
+// Package redis 提供Redis客户端封装，支持所有Redis数据结构和高级功能
 package redis
 
 import (
@@ -44,7 +45,7 @@ func NewRedisClient(config RedisConfig) (*RedisClient, error) {
 	}
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     config.Password,
@@ -62,9 +63,9 @@ func NewRedisClient(config RedisConfig) (*RedisClient, error) {
 	// 测试连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("Redis连接失败: %v", err)
+		return nil, fmt.Errorf("redis连接失败: %v", err)
 	}
 
 	return &RedisClient{Client: rdb}, nil
@@ -316,4 +317,4 @@ func (r *RedisClient) TxPipeline() redis.Pipeliner {
 // Watch 监视键并执行事务
 func (r *RedisClient) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
 	return r.Client.Watch(ctx, fn, keys...)
-} 
+}

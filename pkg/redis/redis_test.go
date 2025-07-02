@@ -100,7 +100,7 @@ func TestRedisOptions(t *testing.T) {
 	// 模拟redis.Options创建
 	// 实际上应该是fmt.Sprintf("%s:%d", config.Host, config.Port)
 	expectedAddr := "redis.example.com:6380"
-	
+
 	opts := &redis.Options{
 		Addr:         expectedAddr,
 		Password:     config.Password,
@@ -142,7 +142,7 @@ func TestRedisOptions(t *testing.T) {
 func TestContextOperations(t *testing.T) {
 	// 测试上下文相关操作
 	ctx := context.Background()
-	
+
 	// 测试带超时的上下文
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -239,7 +239,7 @@ func TestSetOperationParams(t *testing.T) {
 func TestSortedSetOperationParams(t *testing.T) {
 	// 测试有序集合操作参数
 	zsetKey := "zset:scores"
-	
+
 	// 模拟redis.Z结构
 	type Z struct {
 		Score  float64
@@ -330,18 +330,18 @@ func TestGlobalRedisClient(t *testing.T) {
 func TestPipelineOperations(t *testing.T) {
 	// 测试管道操作概念
 	commands := []string{"SET key1 value1", "SET key2 value2", "GET key1"}
-	
+
 	if len(commands) != 3 {
 		t.Error("命令数量错误")
 	}
-	
+
 	// 模拟管道执行结果
 	results := make([]interface{}, len(commands))
 	results[0] = "OK"
-	results[1] = "OK" 
+	results[1] = "OK"
 	results[2] = "value1"
-	
+
 	if results[2] != "value1" {
 		t.Error("管道执行结果错误")
 	}
-} 
+}

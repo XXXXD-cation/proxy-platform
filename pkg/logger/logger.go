@@ -1,3 +1,4 @@
+// Package logger 提供结构化日志记录功能，支持多种输出格式和上下文信息
 package logger
 
 import (
@@ -69,13 +70,13 @@ func New(config LogConfig) (*Logger, error) {
 		if config.Filename == "" {
 			config.Filename = "app.log"
 		}
-		
+
 		// 确保日志目录存在
 		dir := filepath.Dir(config.Filename)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, err
 		}
-		
+
 		file, err := os.OpenFile(config.Filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
 			return nil, err
@@ -108,7 +109,13 @@ func Get() *Logger {
 			Format: "json",
 			Output: "stdout",
 		}
-		logger, _ := New(defaultConfig)
+		logger, err := New(defaultConfig)
+		if err != nil {
+			// 如果创建logger失败，创建一个最基础的logger
+			logger = &Logger{
+				Logger: logrus.New(),
+			}
+		}
 		globalLogger = logger
 	}
 	return globalLogger
@@ -117,20 +124,20 @@ func Get() *Logger {
 // WithContext 添加上下文信息
 func (l *Logger) WithContext(ctx context.Context) *logrus.Entry {
 	entry := l.Logger.WithContext(ctx)
-	
+
 	// 从上下文中提取常用字段
 	if requestID := ctx.Value("request_id"); requestID != nil {
 		entry = entry.WithField("request_id", requestID)
 	}
-	
+
 	if userID := ctx.Value("user_id"); userID != nil {
 		entry = entry.WithField("user_id", userID)
 	}
-	
+
 	if traceID := ctx.Value("trace_id"); traceID != nil {
 		entry = entry.WithField("trace_id", traceID)
 	}
-	
+
 	return entry
 }
 
@@ -149,7 +156,7 @@ func (l *Logger) WithError(err error) *logrus.Entry {
 	return l.Logger.WithError(err)
 }
 
-// 全局便捷方法
+// Debug 记录调试级别日志
 func Debug(args ...interface{}) {
 	Get().Debug(args...)
 }
@@ -198,7 +205,7 @@ func Panicf(format string, args ...interface{}) {
 	Get().Panicf(format, args...)
 }
 
-// 带上下文的全局便捷方法
+// WithContext 创建带有上下文信息的日志条目
 func WithContext(ctx context.Context) *logrus.Entry {
 	return Get().WithContext(ctx)
 }
@@ -218,12 +225,12 @@ func WithError(err error) *logrus.Entry {
 // LoadConfigFromFile 从文件加载日志配置
 func LoadConfigFromFile(configPath string) (LogConfig, error) {
 	var config LogConfig
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return config, err
 	}
-	
+
 	err = yaml.Unmarshal(data, &config)
 	return config, err
 }
@@ -241,4 +248,4 @@ func SetGlobalLevel(level string) error {
 // GetGlobalLevel 获取当前全局日志级别
 func GetGlobalLevel() string {
 	return Get().GetLevel().String()
-} 
+}

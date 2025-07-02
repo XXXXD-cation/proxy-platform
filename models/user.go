@@ -1,3 +1,4 @@
+// Package models 定义了代理平台的数据模型结构
 package models
 
 import (
@@ -8,15 +9,15 @@ import (
 
 // User 用户模型
 type User struct {
-	ID               uint                   `gorm:"primarykey" json:"id"`
-	Username         string                 `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
-	Email            string                 `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
-	PasswordHash     string                 `gorm:"type:varchar(255);not null" json:"-"`
-	SubscriptionPlan SubscriptionPlanType   `gorm:"type:enum('developer','professional','enterprise');default:'developer'" json:"subscription_plan"`
-	Status           UserStatusType         `gorm:"type:enum('active','suspended','deleted');default:'active'" json:"status"`
-	CreatedAt        time.Time              `json:"created_at"`
-	UpdatedAt        time.Time              `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt         `gorm:"index" json:"-"`
+	ID               uint                 `gorm:"primarykey" json:"id"`
+	Username         string               `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
+	Email            string               `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
+	PasswordHash     string               `gorm:"type:varchar(255);not null" json:"-"`
+	SubscriptionPlan SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');default:'developer'" json:"subscription_plan"`
+	Status           UserStatusType       `gorm:"type:enum('active','suspended','deleted');default:'active'" json:"status"`
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt       `gorm:"index" json:"-"`
 
 	// 关联关系
 	APIKeys       []APIKey       `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"api_keys,omitempty"`
@@ -28,9 +29,9 @@ type User struct {
 type SubscriptionPlanType string
 
 const (
-	PlanDeveloper     SubscriptionPlanType = "developer"
-	PlanProfessional  SubscriptionPlanType = "professional"
-	PlanEnterprise    SubscriptionPlanType = "enterprise"
+	PlanDeveloper    SubscriptionPlanType = "developer"
+	PlanProfessional SubscriptionPlanType = "professional"
+	PlanEnterprise   SubscriptionPlanType = "enterprise"
 )
 
 // UserStatusType 用户状态类型
@@ -93,8 +94,8 @@ type APIKey struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// 关联关系
-	User      User        `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
-	UsageLogs []UsageLog  `gorm:"foreignKey:APIKeyID;constraint:OnDelete:SET NULL" json:"-"`
+	User      User       `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
+	UsageLogs []UsageLog `gorm:"foreignKey:APIKeyID;constraint:OnDelete:SET NULL" json:"-"`
 }
 
 // TableName 指定表名
@@ -121,18 +122,18 @@ func (ak *APIKey) UpdateLastUsed() {
 
 // Subscription 订阅模型
 type Subscription struct {
-	ID             uint                 `gorm:"primarykey" json:"id"`
-	UserID         uint                 `gorm:"not null;index" json:"user_id"`
-	PlanType       SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');not null;index" json:"plan_type"`
-	TrafficQuota   int64                `gorm:"default:0" json:"traffic_quota"`
-	TrafficUsed    int64                `gorm:"default:0" json:"traffic_used"`
-	RequestsQuota  int                  `gorm:"default:0" json:"requests_quota"`
-	RequestsUsed   int                  `gorm:"default:0" json:"requests_used"`
-	ExpiresAt      time.Time            `gorm:"not null;index" json:"expires_at"`
-	IsActive       bool                 `gorm:"default:true;index" json:"is_active"`
-	CreatedAt      time.Time            `json:"created_at"`
-	UpdatedAt      time.Time            `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt       `gorm:"index" json:"-"`
+	ID            uint                 `gorm:"primarykey" json:"id"`
+	UserID        uint                 `gorm:"not null;index" json:"user_id"`
+	PlanType      SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');not null;index" json:"plan_type"`
+	TrafficQuota  int64                `gorm:"default:0" json:"traffic_quota"`
+	TrafficUsed   int64                `gorm:"default:0" json:"traffic_used"`
+	RequestsQuota int                  `gorm:"default:0" json:"requests_quota"`
+	RequestsUsed  int                  `gorm:"default:0" json:"requests_used"`
+	ExpiresAt     time.Time            `gorm:"not null;index" json:"expires_at"`
+	IsActive      bool                 `gorm:"default:true;index" json:"is_active"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt       `gorm:"index" json:"-"`
 
 	// 关联关系
 	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
@@ -169,7 +170,7 @@ func (s *Subscription) CanUseService() bool {
 	if !s.IsActive || s.IsExpired() {
 		return false
 	}
-	
+
 	// 检查配额限制
 	if s.TrafficQuota > 0 && s.TrafficUsed >= s.TrafficQuota {
 		return false
@@ -177,6 +178,6 @@ func (s *Subscription) CanUseService() bool {
 	if s.RequestsQuota > 0 && s.RequestsUsed >= s.RequestsQuota {
 		return false
 	}
-	
+
 	return true
-} 
+}

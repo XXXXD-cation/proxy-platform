@@ -1,3 +1,4 @@
+// Package utils 提供通用工具函数，包括字符串、数字、时间、加密、验证、JSON和切片操作
 package utils
 
 import (
@@ -21,7 +22,7 @@ type StringUtils struct{}
 
 // IsEmpty 检查字符串是否为空
 func (s StringUtils) IsEmpty(str string) bool {
-	return len(strings.TrimSpace(str)) == 0
+	return strings.TrimSpace(str) == ""
 }
 
 // IsNotEmpty 检查字符串是否不为空
@@ -108,8 +109,9 @@ func (s StringUtils) SnakeToCamel(str string) string {
 	for i, part := range parts {
 		if i == 0 {
 			result.WriteString(strings.ToLower(part))
-		} else {
-			result.WriteString(strings.Title(part))
+		} else if len(part) > 0 {
+			// 首字母大写，其余小写 (替代已弃用的strings.Title)
+			result.WriteString(strings.ToUpper(string(part[0])) + strings.ToLower(part[1:]))
 		}
 	}
 	return result.String()
@@ -271,7 +273,13 @@ func (c CryptoUtils) GenerateRandomString(length int) string {
 // GenerateUUID 生成UUID (简化版)
 func (c CryptoUtils) GenerateUUID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// 如果crypto/rand失败，使用当前时间戳作为种子生成替代方案
+		now := time.Now().UnixNano()
+		for i := range b {
+			b[i] = byte(now >> (i % 8))
+		}
+	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
@@ -281,28 +289,40 @@ type ValidatorUtils struct{}
 // IsEmail 验证邮箱格式
 func (v ValidatorUtils) IsEmail(email string) bool {
 	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
-	matched, _ := regexp.MatchString(pattern, email)
+	matched, err := regexp.MatchString(pattern, email)
+	if err != nil {
+		return false
+	}
 	return matched
 }
 
 // IsPhone 验证手机号格式 (中国大陆)
 func (v ValidatorUtils) IsPhone(phone string) bool {
 	pattern := `^1[3-9]\d{9}$`
-	matched, _ := regexp.MatchString(pattern, phone)
+	matched, err := regexp.MatchString(pattern, phone)
+	if err != nil {
+		return false
+	}
 	return matched
 }
 
 // IsURL 验证URL格式
 func (v ValidatorUtils) IsURL(url string) bool {
 	pattern := `^https?://[^\s/$.?#].[^\s]*$`
-	matched, _ := regexp.MatchString(pattern, url)
+	matched, err := regexp.MatchString(pattern, url)
+	if err != nil {
+		return false
+	}
 	return matched
 }
 
 // IsIP 验证IP地址格式
 func (v ValidatorUtils) IsIP(ip string) bool {
 	pattern := `^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`
-	matched, _ := regexp.MatchString(pattern, ip)
+	matched, err := regexp.MatchString(pattern, ip)
+	if err != nil {
+		return false
+	}
 	return matched
 }
 
@@ -465,4 +485,4 @@ func Retry(maxAttempts int, delay time.Duration, fn func() error) error {
 		}
 	}
 	return err
-} 
+}

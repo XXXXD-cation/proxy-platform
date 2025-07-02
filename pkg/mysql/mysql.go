@@ -1,3 +1,4 @@
+// Package mysql 提供MySQL数据库客户端封装，支持连接池、事务和SQL构建
 package mysql
 
 import (
@@ -7,6 +8,11 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+)
+
+const (
+	// DefaultCharset 默认字符集
+	DefaultCharset = "utf8mb4"
 )
 
 // MySQLClient MySQL客户端封装
@@ -33,7 +39,7 @@ var globalClient *MySQLClient
 func NewMySQLClient(config MySQLConfig) (*MySQLClient, error) {
 	// 设置默认值
 	if config.Charset == "" {
-		config.Charset = "utf8mb4"
+		config.Charset = DefaultCharset
 	}
 	if config.MaxIdle <= 0 {
 		config.MaxIdle = 10
@@ -69,7 +75,7 @@ func NewMySQLClient(config MySQLConfig) (*MySQLClient, error) {
 	// 测试连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("MySQL连接测试失败: %v", err)
@@ -122,7 +128,11 @@ func (m *MySQLClient) Execute(ctx context.Context, query string, args ...interfa
 	if err != nil {
 		return nil, fmt.Errorf("准备SQL语句失败: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if closeErr := stmt.Close(); closeErr != nil {
+			// 记录关闭错误，但不影响主流程
+		}
+	}()
 
 	result, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
@@ -138,7 +148,11 @@ func (m *MySQLClient) ExecuteInTx(ctx context.Context, tx *sql.Tx, query string,
 	if err != nil {
 		return nil, fmt.Errorf("准备SQL语句失败: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if closeErr := stmt.Close(); closeErr != nil {
+			// 记录关闭错误，但不影响主流程
+		}
+	}()
 
 	result, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
@@ -174,12 +188,12 @@ func (m *MySQLClient) Insert(ctx context.Context, query string, args ...interfac
 	if err != nil {
 		return 0, err
 	}
-	
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("获取插入ID失败: %v", err)
 	}
-	
+
 	return id, nil
 }
 
@@ -189,12 +203,12 @@ func (m *MySQLClient) InsertInTx(ctx context.Context, tx *sql.Tx, query string, 
 	if err != nil {
 		return 0, err
 	}
-	
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("获取插入ID失败: %v", err)
 	}
-	
+
 	return id, nil
 }
 
@@ -204,12 +218,12 @@ func (m *MySQLClient) Update(ctx context.Context, query string, args ...interfac
 	if err != nil {
 		return 0, err
 	}
-	
+
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("获取影响行数失败: %v", err)
 	}
-	
+
 	return affected, nil
 }
 
@@ -219,12 +233,12 @@ func (m *MySQLClient) UpdateInTx(ctx context.Context, tx *sql.Tx, query string, 
 	if err != nil {
 		return 0, err
 	}
-	
+
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("获取影响行数失败: %v", err)
 	}
-	
+
 	return affected, nil
 }
 
@@ -234,12 +248,12 @@ func (m *MySQLClient) Delete(ctx context.Context, query string, args ...interfac
 	if err != nil {
 		return 0, err
 	}
-	
+
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("获取影响行数失败: %v", err)
 	}
-	
+
 	return affected, nil
 }
 
@@ -249,12 +263,12 @@ func (m *MySQLClient) DeleteInTx(ctx context.Context, tx *sql.Tx, query string, 
 	if err != nil {
 		return 0, err
 	}
-	
+
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("获取影响行数失败: %v", err)
 	}
-	
+
 	return affected, nil
 }
 
@@ -283,13 +297,21 @@ func (m *MySQLClient) BatchInsert(ctx context.Context, query string, args [][]in
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			// 记录回滚错误，但不影响主流程
+		}
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("准备SQL语句失败: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if closeErr := stmt.Close(); closeErr != nil {
+			// 记录关闭错误，但不影响主流程
+		}
+	}()
 
 	for _, arg := range args {
 		if _, err := stmt.ExecContext(ctx, arg...); err != nil {
@@ -310,7 +332,11 @@ func (m *MySQLClient) TransactionWithFunc(ctx context.Context, fn func(*sql.Tx) 
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			// 记录回滚错误，但不影响主流程
+		}
+	}()
 
 	if err := fn(tx); err != nil {
 		return err
@@ -344,12 +370,12 @@ func BuildInsertSQL(table string, columns []string) string {
 	if len(columns) == 0 {
 		return ""
 	}
-	
+
 	placeholders := make([]string, len(columns))
 	for i := range placeholders {
 		placeholders[i] = "?"
 	}
-	
+
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		table,
 		joinStrings(columns, ","),
@@ -362,17 +388,17 @@ func BuildUpdateSQL(table string, columns []string, whereClause string) string {
 	if len(columns) == 0 {
 		return ""
 	}
-	
+
 	setClauses := make([]string, len(columns))
 	for i, col := range columns {
 		setClauses[i] = fmt.Sprintf("%s = ?", col)
 	}
-	
+
 	sql := fmt.Sprintf("UPDATE %s SET %s", table, joinStrings(setClauses, ","))
 	if whereClause != "" {
 		sql += " WHERE " + whereClause
 	}
-	
+
 	return sql
 }
 
@@ -381,21 +407,21 @@ func BuildSelectSQL(table string, columns []string, whereClause string, orderBy 
 	if len(columns) == 0 {
 		columns = []string{"*"}
 	}
-	
+
 	sql := fmt.Sprintf("SELECT %s FROM %s", joinStrings(columns, ","), table)
-	
+
 	if whereClause != "" {
 		sql += " WHERE " + whereClause
 	}
-	
+
 	if orderBy != "" {
 		sql += " ORDER BY " + orderBy
 	}
-	
+
 	if limit > 0 {
 		sql += fmt.Sprintf(" LIMIT %d", limit)
 	}
-	
+
 	return sql
 }
 
@@ -407,10 +433,10 @@ func joinStrings(strs []string, sep string) string {
 	if len(strs) == 1 {
 		return strs[0]
 	}
-	
+
 	result := strs[0]
 	for i := 1; i < len(strs); i++ {
 		result += sep + strs[i]
 	}
 	return result
-} 
+}
