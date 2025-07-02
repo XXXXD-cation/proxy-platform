@@ -8,8 +8,11 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+// 定义context key类型
+type contextKey string
+
 func TestRedisConfig(t *testing.T) {
-	config := RedisConfig{
+	config := Config{
 		Host:        "localhost",
 		Port:        6379,
 		Password:    "password123",
@@ -40,7 +43,7 @@ func TestRedisConfig(t *testing.T) {
 
 func TestRedisConfigDefaults(t *testing.T) {
 	// 测试默认值设置逻辑
-	config := RedisConfig{
+	config := Config{
 		Host: "localhost",
 		Port: 6379,
 	}
@@ -75,18 +78,21 @@ func TestRedisConfigDefaults(t *testing.T) {
 }
 
 func TestRedisClientStructure(t *testing.T) {
-	// 测试RedisClient结构的嵌入
-	client := &RedisClient{
+	// 测试Client结构的嵌入
+	client := &Client{
 		Client: nil, // 在实际使用中这里会是redis.Client实例
 	}
 
-	if client == nil {
-		t.Error("RedisClient创建失败")
+	// client不可能为nil，因为我们刚刚创建了它
+	// 这里我们只是验证结构体创建成功
+	if client.Client != nil {
+		// 在实际使用中，这里会有redis.Client实例
+		t.Log("Client结构体创建成功")
 	}
 }
 
 func TestRedisOptions(t *testing.T) {
-	config := RedisConfig{
+	config := Config{
 		Host:        "redis.example.com",
 		Port:        6380,
 		Password:    "secret",
@@ -97,8 +103,6 @@ func TestRedisOptions(t *testing.T) {
 		DialTimeout: 10,
 	}
 
-	// 模拟redis.Options创建
-	// 实际上应该是fmt.Sprintf("%s:%d", config.Host, config.Port)
 	expectedAddr := "redis.example.com:6380"
 
 	opts := &redis.Options{
@@ -152,8 +156,9 @@ func TestContextOperations(t *testing.T) {
 	}
 
 	// 测试上下文值
-	ctx = context.WithValue(ctx, "key", "value")
-	if ctx.Value("key") != "value" {
+	const testKey contextKey = "key"
+	ctx = context.WithValue(ctx, testKey, "value")
+	if ctx.Value(testKey) != "value" {
 		t.Error("上下文值设置错误")
 	}
 }

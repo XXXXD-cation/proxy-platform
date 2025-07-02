@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestStringUtils(t *testing.T) {
+func TestStringUtils_BasicChecks(t *testing.T) {
 	// 测试IsEmpty
 	if !String.IsEmpty("") {
 		t.Error("期望空字符串返回true")
@@ -30,7 +30,9 @@ func TestStringUtils(t *testing.T) {
 	if String.Trim("  hello  ") != "hello" {
 		t.Error("Trim函数未正确去除空格")
 	}
+}
 
+func TestStringUtils_SearchOperations(t *testing.T) {
 	// 测试Contains
 	if !String.Contains("hello world", "world") {
 		t.Error("Contains函数未正确检测子串")
@@ -53,7 +55,9 @@ func TestStringUtils(t *testing.T) {
 	if !String.EndsWith("hello world", "world") {
 		t.Error("EndsWith函数未正确检测后缀")
 	}
+}
 
+func TestStringUtils_Transformations(t *testing.T) {
 	// 测试Reverse
 	if String.Reverse("hello") != "olleh" {
 		t.Error("Reverse函数未正确反转字符串")
@@ -76,7 +80,9 @@ func TestStringUtils(t *testing.T) {
 	if String.PadRight("123", 5, "0") != "12300" {
 		t.Error("PadRight函数未正确右填充")
 	}
+}
 
+func TestStringUtils_CaseConversions(t *testing.T) {
 	// 测试CamelToSnake
 	if String.CamelToSnake("HelloWorld") != "hello_world" {
 		t.Error("CamelToSnake函数转换错误")
@@ -88,7 +94,7 @@ func TestStringUtils(t *testing.T) {
 	}
 }
 
-func TestNumberUtils(t *testing.T) {
+func TestNumberUtils_Validation(t *testing.T) {
 	// 测试IsNumber
 	if !Number.IsNumber("123.45") {
 		t.Error("IsNumber函数未正确识别数字")
@@ -104,7 +110,9 @@ func TestNumberUtils(t *testing.T) {
 	if Number.IsInteger("123.45") {
 		t.Error("IsInteger函数错误识别浮点数")
 	}
+}
 
+func TestNumberUtils_Conversions(t *testing.T) {
 	// 测试ToInt
 	val, err := Number.ToInt("123")
 	if err != nil || val != 123 {
@@ -122,7 +130,9 @@ func TestNumberUtils(t *testing.T) {
 	if err != nil || fval != 123.45 {
 		t.Error("ToFloat64函数转换错误")
 	}
+}
 
+func TestNumberUtils_Operations(t *testing.T) {
 	// 测试Round
 	if Number.Round(3.14159, 2) != 3.14 {
 		t.Error("Round函数四舍五入错误")
@@ -147,7 +157,7 @@ func TestNumberUtils(t *testing.T) {
 	}
 }
 
-func TestTimeUtils(t *testing.T) {
+func TestTimeUtils_BasicOperations(t *testing.T) {
 	// 测试Now
 	now := Time.Now()
 	if now.IsZero() {
@@ -165,17 +175,14 @@ func TestTimeUtils(t *testing.T) {
 	if milli <= 0 {
 		t.Error("NowUnixMilli函数返回无效毫秒时间戳")
 	}
+}
+
+func TestTimeUtils_Formatting(t *testing.T) {
+	testTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// 测试Format
-	testTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 	if Time.Format(testTime, "2006-01-02") != "2023-01-01" {
 		t.Error("Format函数格式化错误")
-	}
-
-	// 测试Parse
-	parsed, err := Time.Parse("2006-01-02", "2023-01-01")
-	if err != nil || parsed.Year() != 2023 {
-		t.Error("Parse函数解析错误")
 	}
 
 	// 测试FormatDate
@@ -186,6 +193,14 @@ func TestTimeUtils(t *testing.T) {
 	// 测试FormatDateTime
 	if Time.FormatDateTime(testTime) != "2023-01-01 12:00:00" {
 		t.Error("FormatDateTime函数格式化错误")
+	}
+}
+
+func TestTimeUtils_Parsing(t *testing.T) {
+	// 测试Parse
+	parsed, err := Time.Parse("2006-01-02", "2023-01-01")
+	if err != nil || parsed.Year() != 2023 {
+		t.Error("Parse函数解析错误")
 	}
 
 	// 测试ParseDate
@@ -199,6 +214,10 @@ func TestTimeUtils(t *testing.T) {
 	if err != nil || datetime.Hour() != 12 {
 		t.Error("ParseDateTime函数解析错误")
 	}
+}
+
+func TestTimeUtils_Calculations(t *testing.T) {
+	testTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// 测试AddDays
 	nextDay := Time.AddDays(testTime, 1)
@@ -226,13 +245,6 @@ func TestTimeUtils(t *testing.T) {
 }
 
 func TestCryptoUtils(t *testing.T) {
-	// 测试MD5
-	md5Hash := Crypto.MD5("hello")
-	expectedMD5 := "5d41402abc4b2a76b9719d911017c592"
-	if md5Hash != expectedMD5 {
-		t.Errorf("MD5函数计算错误，期望 %s，实际 %s", expectedMD5, md5Hash)
-	}
-
 	// 测试SHA256
 	sha256Hash := Crypto.SHA256("hello")
 	expectedSHA256 := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
@@ -248,7 +260,7 @@ func TestCryptoUtils(t *testing.T) {
 
 	// 测试GenerateUUID
 	uuid := Crypto.GenerateUUID()
-	if len(uuid) == 0 {
+	if uuid == "" {
 		t.Error("GenerateUUID函数生成空UUID")
 	}
 }

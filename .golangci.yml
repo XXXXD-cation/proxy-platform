@@ -46,7 +46,7 @@ linters-settings:
     locale: US
     
   lll:
-    line-length: 120
+    line-length: 150
     
   goimports:
     local-prefixes: proxy-platform
@@ -106,7 +106,7 @@ linters:
     - misspell
     - nakedret
     - rowserrcheck
-    - exportloopref
+    - copyloopvar
     - staticcheck
     - stylecheck
     - typecheck

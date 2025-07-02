@@ -1,9 +1,32 @@
 package models
 
 import (
+	"math"
 	"time"
 
 	"gorm.io/gorm"
+)
+
+// 常量定义
+const (
+	// Quality score thresholds 质量分数阈值
+	MinHealthyQualityScore = 0.5
+	MinHealthySuccessRate  = 50.0
+	MaxLatencyThreshold    = 5000 // 毫秒
+
+	// Score weights 评分权重
+	LatencyWeight  = 0.4
+	SuccessWeight  = 0.6
+	HistoryWeight  = 0.7
+	NewScoreWeight = 0.3
+
+	// Unit conversion 单位转换
+	BytesPerMB = 1024 * 1024
+
+	// Default values 默认值
+	DefaultPoolMaxProxies      = 100
+	DefaultPoolMinQualityScore = 0.50
+	DefaultPoolPriority        = 1
 )
 
 // ProxyIP 代理IP模型
@@ -63,13 +86,13 @@ func (p *ProxyIP) IsHealthy() bool {
 		return false
 	}
 
-	// 质量评分低于0.5认为不健康
-	if p.QualityScore < 0.5 {
+	// 质量评分低于阈值认为不健康
+	if p.QualityScore < MinHealthyQualityScore {
 		return false
 	}
 
-	// 成功率低于50%认为不健康
-	if p.SuccessRate < 50.0 {
+	// 成功率低于阈值认为不健康
+	if p.SuccessRate < MinHealthySuccessRate {
 		return false
 	}
 
@@ -81,8 +104,8 @@ func (p *ProxyIP) UpdateQualityScore(latency int, success bool) {
 	// 基于延迟和成功率的简单评分算法
 	latencyScore := 1.0
 	if latency > 0 {
-		// 延迟越低评分越高，最大5秒超时
-		latencyScore = max(0, (5000-float64(latency))/5000)
+		// 延迟越低评分越高，最大延迟阈值
+		latencyScore = maxFloat64(0, (MaxLatencyThreshold-float64(latency))/MaxLatencyThreshold)
 	}
 
 	successScore := 0.0
@@ -90,12 +113,12 @@ func (p *ProxyIP) UpdateQualityScore(latency int, success bool) {
 		successScore = 1.0
 	}
 
-	// 加权平均：延迟权重40%，成功率权重60%
-	newScore := (latencyScore*0.4 + successScore*0.6)
+	// 加权平均：延迟权重和成功率权重
+	newScore := (latencyScore*LatencyWeight + successScore*SuccessWeight)
 
 	// 与历史评分平滑融合
 	if p.QualityScore > 0 {
-		p.QualityScore = (p.QualityScore*0.7 + newScore*0.3)
+		p.QualityScore = (p.QualityScore*HistoryWeight + newScore*NewScoreWeight)
 	} else {
 		p.QualityScore = newScore
 	}
@@ -153,7 +176,7 @@ func (ul *UsageLog) IsSuccess() bool {
 
 // GetTrafficMB 获取流量MB数
 func (ul *UsageLog) GetTrafficMB() float64 {
-	return float64(ul.TrafficBytes) / (1024 * 1024)
+	return float64(ul.TrafficBytes) / BytesPerMB
 }
 
 // ProxyPool 代理池配置
@@ -198,9 +221,7 @@ func (ProxyScheduleLog) TableName() string {
 	return "proxy_schedule_logs"
 }
 
-func max(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
+// maxFloat64 返回两个float64中的最大值
+func maxFloat64(a, b float64) float64 {
+	return math.Max(a, b)
 }

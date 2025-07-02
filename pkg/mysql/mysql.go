@@ -5,23 +5,33 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
+	// MySQL驱动程序，通过空导入自动注册
 	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
 	// DefaultCharset 默认字符集
 	DefaultCharset = "utf8mb4"
+	// DefaultMaxIdle 默认最大空闲连接数
+	DefaultMaxIdle = 10
+	// DefaultMaxOpen 默认最大打开连接数
+	DefaultMaxOpen = 50
+	// DefaultMaxLife 默认连接最大生存时间（秒）
+	DefaultMaxLife = 3600
+	// DefaultTimeout 默认连接超时时间（秒）
+	DefaultTimeout = 5
 )
 
-// MySQLClient MySQL客户端封装
-type MySQLClient struct {
+// Client MySQL客户端封装
+type Client struct {
 	*sql.DB
 }
 
-// MySQLConfig MySQL配置
-type MySQLConfig struct {
+// Config MySQL配置
+type Config struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
@@ -33,22 +43,22 @@ type MySQLConfig struct {
 	MaxLife  int    `yaml:"max_life"`
 }
 
-var globalClient *MySQLClient
+var globalClient *Client
 
-// NewMySQLClient 创建MySQL客户端
-func NewMySQLClient(config MySQLConfig) (*MySQLClient, error) {
+// NewClient 创建MySQL客户端
+func NewClient(config *Config) (*Client, error) {
 	// 设置默认值
 	if config.Charset == "" {
 		config.Charset = DefaultCharset
 	}
 	if config.MaxIdle <= 0 {
-		config.MaxIdle = 10
+		config.MaxIdle = DefaultMaxIdle
 	}
 	if config.MaxOpen <= 0 {
-		config.MaxOpen = 50
+		config.MaxOpen = DefaultMaxOpen
 	}
 	if config.MaxLife <= 0 {
-		config.MaxLife = 3600 // 1小时
+		config.MaxLife = DefaultMaxLife
 	}
 
 	// 构建DSN
@@ -73,7 +83,7 @@ func NewMySQLClient(config MySQLConfig) (*MySQLClient, error) {
 	db.SetConnMaxLifetime(time.Duration(config.MaxLife) * time.Second)
 
 	// 测试连接
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout*time.Second)
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
@@ -81,12 +91,12 @@ func NewMySQLClient(config MySQLConfig) (*MySQLClient, error) {
 		return nil, fmt.Errorf("MySQL连接测试失败: %v", err)
 	}
 
-	return &MySQLClient{DB: db}, nil
+	return &Client{DB: db}, nil
 }
 
 // Init 初始化全局MySQL客户端
-func Init(config MySQLConfig) error {
-	client, err := NewMySQLClient(config)
+func Init(config *Config) error {
+	client, err := NewClient(config)
 	if err != nil {
 		return err
 	}
@@ -95,7 +105,7 @@ func Init(config MySQLConfig) error {
 }
 
 // Get 获取全局MySQL客户端
-func Get() *MySQLClient {
+func Get() *Client {
 	if globalClient == nil {
 		panic("MySQL客户端未初始化，请先调用 Init")
 	}
@@ -103,34 +113,34 @@ func Get() *MySQLClient {
 }
 
 // Close 关闭MySQL连接
-func (m *MySQLClient) Close() error {
-	return m.DB.Close()
+func (c *Client) Close() error {
+	return c.DB.Close()
 }
 
 // Begin 开始事务
-func (m *MySQLClient) Begin() (*sql.Tx, error) {
-	return m.DB.Begin()
+func (c *Client) Begin() (*sql.Tx, error) {
+	return c.DB.Begin()
 }
 
 // BeginContext 开始事务(带上下文)
-func (m *MySQLClient) BeginContext(ctx context.Context) (*sql.Tx, error) {
-	return m.DB.BeginTx(ctx, nil)
+func (c *Client) BeginContext(ctx context.Context) (*sql.Tx, error) {
+	return c.DB.BeginTx(ctx, nil)
 }
 
 // BeginWithOptions 开始事务(带选项)
-func (m *MySQLClient) BeginWithOptions(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	return m.DB.BeginTx(ctx, opts)
+func (c *Client) BeginWithOptions(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+	return c.DB.BeginTx(ctx, opts)
 }
 
 // Execute 执行SQL语句(INSERT, UPDATE, DELETE)
-func (m *MySQLClient) Execute(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	stmt, err := m.DB.PrepareContext(ctx, query)
+func (c *Client) Execute(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	stmt, err := c.DB.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("准备SQL语句失败: %v", err)
 	}
 	defer func() {
 		if closeErr := stmt.Close(); closeErr != nil {
-			// 记录关闭错误，但不影响主流程
+			log.Printf("关闭预处理语句失败: %v", closeErr)
 		}
 	}()
 
@@ -143,14 +153,15 @@ func (m *MySQLClient) Execute(ctx context.Context, query string, args ...interfa
 }
 
 // ExecuteInTx 在事务中执行SQL语句
-func (m *MySQLClient) ExecuteInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
+func (c *Client) ExecuteInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) (sql.Result, error) {
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("准备SQL语句失败: %v", err)
 	}
 	defer func() {
 		if closeErr := stmt.Close(); closeErr != nil {
-			// 记录关闭错误，但不影响主流程
+			log.Printf("关闭预处理语句失败: %v", closeErr)
 		}
 	}()
 
@@ -163,28 +174,30 @@ func (m *MySQLClient) ExecuteInTx(ctx context.Context, tx *sql.Tx, query string,
 }
 
 // QueryRow 查询单行数据
-func (m *MySQLClient) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return m.DB.QueryRowContext(ctx, query, args...)
+func (c *Client) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return c.DB.QueryRowContext(ctx, query, args...)
 }
 
 // QueryRows 查询多行数据
-func (m *MySQLClient) QueryRows(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return m.DB.QueryContext(ctx, query, args...)
+func (c *Client) QueryRows(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return c.DB.QueryContext(ctx, query, args...)
 }
 
 // QueryRowInTx 在事务中查询单行数据
-func (m *MySQLClient) QueryRowInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) *sql.Row {
+func (c *Client) QueryRowInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) *sql.Row {
 	return tx.QueryRowContext(ctx, query, args...)
 }
 
 // QueryRowsInTx 在事务中查询多行数据
-func (m *MySQLClient) QueryRowsInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (*sql.Rows, error) {
+func (c *Client) QueryRowsInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) (*sql.Rows, error) {
 	return tx.QueryContext(ctx, query, args...)
 }
 
 // Insert 插入数据并返回插入ID
-func (m *MySQLClient) Insert(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	result, err := m.Execute(ctx, query, args...)
+func (c *Client) Insert(ctx context.Context, query string, args ...interface{}) (int64, error) {
+	result, err := c.Execute(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -198,8 +211,9 @@ func (m *MySQLClient) Insert(ctx context.Context, query string, args ...interfac
 }
 
 // InsertInTx 在事务中插入数据
-func (m *MySQLClient) InsertInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (int64, error) {
-	result, err := m.ExecuteInTx(ctx, tx, query, args...)
+func (c *Client) InsertInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) (int64, error) {
+	result, err := c.ExecuteInTx(ctx, tx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -213,8 +227,8 @@ func (m *MySQLClient) InsertInTx(ctx context.Context, tx *sql.Tx, query string, 
 }
 
 // Update 更新数据并返回影响行数
-func (m *MySQLClient) Update(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	result, err := m.Execute(ctx, query, args...)
+func (c *Client) Update(ctx context.Context, query string, args ...interface{}) (int64, error) {
+	result, err := c.Execute(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -228,8 +242,9 @@ func (m *MySQLClient) Update(ctx context.Context, query string, args ...interfac
 }
 
 // UpdateInTx 在事务中更新数据
-func (m *MySQLClient) UpdateInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (int64, error) {
-	result, err := m.ExecuteInTx(ctx, tx, query, args...)
+func (c *Client) UpdateInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) (int64, error) {
+	result, err := c.ExecuteInTx(ctx, tx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -243,8 +258,8 @@ func (m *MySQLClient) UpdateInTx(ctx context.Context, tx *sql.Tx, query string, 
 }
 
 // Delete 删除数据并返回影响行数
-func (m *MySQLClient) Delete(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	result, err := m.Execute(ctx, query, args...)
+func (c *Client) Delete(ctx context.Context, query string, args ...interface{}) (int64, error) {
+	result, err := c.Execute(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -258,8 +273,9 @@ func (m *MySQLClient) Delete(ctx context.Context, query string, args ...interfac
 }
 
 // DeleteInTx 在事务中删除数据
-func (m *MySQLClient) DeleteInTx(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (int64, error) {
-	result, err := m.ExecuteInTx(ctx, tx, query, args...)
+func (c *Client) DeleteInTx(ctx context.Context, tx *sql.Tx, query string,
+	args ...interface{}) (int64, error) {
+	result, err := c.ExecuteInTx(ctx, tx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -273,9 +289,9 @@ func (m *MySQLClient) DeleteInTx(ctx context.Context, tx *sql.Tx, query string, 
 }
 
 // Count 统计记录数
-func (m *MySQLClient) Count(ctx context.Context, query string, args ...interface{}) (int64, error) {
+func (c *Client) Count(ctx context.Context, query string, args ...interface{}) (int64, error) {
 	var count int64
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&count)
+	err := c.DB.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("统计记录数失败: %v", err)
 	}
@@ -283,8 +299,8 @@ func (m *MySQLClient) Count(ctx context.Context, query string, args ...interface
 }
 
 // Exists 检查记录是否存在
-func (m *MySQLClient) Exists(ctx context.Context, query string, args ...interface{}) (bool, error) {
-	count, err := m.Count(ctx, query, args...)
+func (c *Client) Exists(ctx context.Context, query string, args ...interface{}) (bool, error) {
+	count, err := c.Count(ctx, query, args...)
 	if err != nil {
 		return false, err
 	}
@@ -292,14 +308,14 @@ func (m *MySQLClient) Exists(ctx context.Context, query string, args ...interfac
 }
 
 // BatchInsert 批量插入数据
-func (m *MySQLClient) BatchInsert(ctx context.Context, query string, args [][]interface{}) error {
-	tx, err := m.BeginContext(ctx)
+func (c *Client) BatchInsert(ctx context.Context, query string, args [][]interface{}) error {
+	tx, err := c.BeginContext(ctx)
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %v", err)
 	}
 	defer func() {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			// 记录回滚错误，但不影响主流程
+			log.Printf("事务回滚失败: %v", rollbackErr)
 		}
 	}()
 
@@ -309,7 +325,7 @@ func (m *MySQLClient) BatchInsert(ctx context.Context, query string, args [][]in
 	}
 	defer func() {
 		if closeErr := stmt.Close(); closeErr != nil {
-			// 记录关闭错误，但不影响主流程
+			log.Printf("关闭预处理语句失败: %v", closeErr)
 		}
 	}()
 
@@ -327,14 +343,14 @@ func (m *MySQLClient) BatchInsert(ctx context.Context, query string, args [][]in
 }
 
 // TransactionWithFunc 使用函数执行事务
-func (m *MySQLClient) TransactionWithFunc(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := m.BeginContext(ctx)
+func (c *Client) TransactionWithFunc(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := c.BeginContext(ctx)
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %v", err)
 	}
 	defer func() {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			// 记录回滚错误，但不影响主流程
+			log.Printf("事务回滚失败: %v", rollbackErr)
 		}
 	}()
 
@@ -350,18 +366,18 @@ func (m *MySQLClient) TransactionWithFunc(ctx context.Context, fn func(*sql.Tx) 
 }
 
 // GetStats 获取数据库连接池统计信息
-func (m *MySQLClient) GetStats() sql.DBStats {
-	return m.DB.Stats()
+func (c *Client) GetStats() sql.DBStats {
+	return c.DB.Stats()
 }
 
 // Ping 测试数据库连接
-func (m *MySQLClient) Ping(ctx context.Context) error {
-	return m.DB.PingContext(ctx)
+func (c *Client) Ping(ctx context.Context) error {
+	return c.DB.PingContext(ctx)
 }
 
 // IsHealthy 检查数据库是否健康
-func (m *MySQLClient) IsHealthy(ctx context.Context) bool {
-	err := m.Ping(ctx)
+func (c *Client) IsHealthy(ctx context.Context) bool {
+	err := c.Ping(ctx)
 	return err == nil
 }
 
@@ -403,7 +419,7 @@ func BuildUpdateSQL(table string, columns []string, whereClause string) string {
 }
 
 // BuildSelectSQL 构建查询SQL语句
-func BuildSelectSQL(table string, columns []string, whereClause string, orderBy string, limit int) string {
+func BuildSelectSQL(table string, columns []string, whereClause, orderBy string, limit int) string {
 	if len(columns) == 0 {
 		columns = []string{"*"}
 	}
@@ -425,8 +441,8 @@ func BuildSelectSQL(table string, columns []string, whereClause string, orderBy 
 	return sql
 }
 
-// joinStrings 连接字符串数组
-func joinStrings(strs []string, sep string) string {
+// joinStrings 连接字符串数组，使用固定的逗号分隔符
+func joinStrings(strs []string, _ string) string {
 	if len(strs) == 0 {
 		return ""
 	}
@@ -436,7 +452,7 @@ func joinStrings(strs []string, sep string) string {
 
 	result := strs[0]
 	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
+		result += "," + strs[i]
 	}
 	return result
 }

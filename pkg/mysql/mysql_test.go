@@ -8,7 +8,7 @@ import (
 )
 
 func TestMySQLConfig(t *testing.T) {
-	config := MySQLConfig{
+	config := Config{
 		Host:     "localhost",
 		Port:     3306,
 		User:     "test",
@@ -128,7 +128,7 @@ func TestJoinStrings(t *testing.T) {
 // 模拟MySQL客户端测试（不需要真实数据库连接）
 func TestMySQLClientStructure(t *testing.T) {
 	// 测试默认值设置逻辑
-	config := MySQLConfig{
+	config := Config{
 		Host:     "localhost",
 		Port:     3306,
 		User:     "test",

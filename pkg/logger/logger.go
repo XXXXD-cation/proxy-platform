@@ -12,6 +12,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// 常量定义
+const (
+	// File permissions 文件权限
+	DirPermission  = 0o755 // 目录权限
+	FilePermission = 0o666 // 文件权限
+)
+
 // Logger 日志管理器
 type Logger struct {
 	*logrus.Logger
@@ -32,7 +39,7 @@ type LogConfig struct {
 var globalLogger *Logger
 
 // New 创建新的日志实例
-func New(config LogConfig) (*Logger, error) {
+func New(config *LogConfig) (*Logger, error) {
 	logger := logrus.New()
 
 	// 设置日志级别
@@ -73,11 +80,11 @@ func New(config LogConfig) (*Logger, error) {
 
 		// 确保日志目录存在
 		dir := filepath.Dir(config.Filename)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, DirPermission); err != nil {
 			return nil, err
 		}
 
-		file, err := os.OpenFile(config.Filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		file, err := os.OpenFile(config.Filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, FilePermission)
 		if err != nil {
 			return nil, err
 		}
@@ -91,7 +98,7 @@ func New(config LogConfig) (*Logger, error) {
 }
 
 // Init 初始化全局日志器
-func Init(config LogConfig) error {
+func Init(config *LogConfig) error {
 	logger, err := New(config)
 	if err != nil {
 		return err
@@ -104,7 +111,7 @@ func Init(config LogConfig) error {
 func Get() *Logger {
 	if globalLogger == nil {
 		// 使用默认配置创建日志器
-		defaultConfig := LogConfig{
+		defaultConfig := &LogConfig{
 			Level:  "info",
 			Format: "json",
 			Output: "stdout",

@@ -2,19 +2,35 @@
 package utils
 
 import (
-	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
-	mrand "math/rand"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+)
+
+// 常量定义
+const (
+	// MathConstants 数学相关常量
+	DecimalBase      = 10
+	FloatBitSize     = 64
+	PowerBase        = 10
+	HoursPerDay      = 24
+	BitsPerByte      = 8
+	UUIDLength       = 16
+	DefaultPrecision = 2
+
+	// String constants 字符串相关常量
+	DefaultTruncateSuffix = "..."
+
+	// Crypto constants 加密相关常量
+	DefaultRandomStringCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
 // StringUtils 字符串工具函数
@@ -109,7 +125,7 @@ func (s StringUtils) SnakeToCamel(str string) string {
 	for i, part := range parts {
 		if i == 0 {
 			result.WriteString(strings.ToLower(part))
-		} else if len(part) > 0 {
+		} else if part != "" {
 			// 首字母大写，其余小写 (替代已弃用的strings.Title)
 			result.WriteString(strings.ToUpper(string(part[0])) + strings.ToLower(part[1:]))
 		}
@@ -149,7 +165,7 @@ func (n NumberUtils) ToFloat64(str string) (float64, error) {
 
 // Round 浮点数四舍五入
 func (n NumberUtils) Round(num float64, precision int) float64 {
-	ratio := math.Pow(10, float64(precision))
+	ratio := math.Pow(PowerBase, float64(precision))
 	return math.Round(num*ratio) / ratio
 }
 
@@ -240,44 +256,49 @@ func (t TimeUtils) AddMinutes(tm time.Time, minutes int) time.Time {
 	return tm.Add(time.Duration(minutes) * time.Minute)
 }
 
-// DiffDays 计算两个时间相差的天数
+// DiffDays 计算两个时间之间的天数差
 func (t TimeUtils) DiffDays(t1, t2 time.Time) int {
-	return int(t1.Sub(t2).Hours() / 24)
+	return int(t1.Sub(t2).Hours() / HoursPerDay)
 }
 
 // CryptoUtils 加密工具函数
 type CryptoUtils struct{}
 
-// MD5 计算MD5哈希
-func (c CryptoUtils) MD5(data string) string {
-	hash := md5.Sum([]byte(data))
-	return hex.EncodeToString(hash[:])
-}
-
-// SHA256 计算SHA256哈希
+// SHA256 计算SHA256哈希 (推荐使用，安全性更高)
 func (c CryptoUtils) SHA256(data string) string {
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
 }
 
-// GenerateRandomString 生成随机字符串
+// GenerateRandomString 生成加密安全的随机字符串
 func (c CryptoUtils) GenerateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const charset = DefaultRandomStringCharset
 	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[mrand.Intn(len(charset))]
+
+	// 使用加密安全的随机数生成器
+	if _, err := rand.Read(b); err != nil {
+		// 如果crypto/rand失败，使用时间戳作为后备方案
+		now := time.Now().UnixNano()
+		for i := range b {
+			b[i] = byte(now >> (i % BitsPerByte))
+		}
+	} else {
+		// 将随机字节映射到字符集
+		for i := range b {
+			b[i] = charset[int(b[i])%len(charset)]
+		}
 	}
 	return string(b)
 }
 
 // GenerateUUID 生成UUID (简化版)
 func (c CryptoUtils) GenerateUUID() string {
-	b := make([]byte, 16)
+	b := make([]byte, UUIDLength)
 	if _, err := rand.Read(b); err != nil {
 		// 如果crypto/rand失败，使用当前时间戳作为种子生成替代方案
 		now := time.Now().UnixNano()
 		for i := range b {
-			b[i] = byte(now >> (i % 8))
+			b[i] = byte(now >> (i % BitsPerByte))
 		}
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])

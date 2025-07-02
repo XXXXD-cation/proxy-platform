@@ -11,6 +11,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// 定义context key类型
+type contextKey string
+
 func TestNew(t *testing.T) {
 	config := LogConfig{
 		Level:  "debug",
@@ -18,13 +21,13 @@ func TestNew(t *testing.T) {
 		Output: "stdout",
 	}
 
-	logger, err := New(config)
+	logger, err := New(&config)
 	if err != nil {
 		t.Fatalf("创建日志器失败: %v", err)
 	}
 
 	if logger == nil {
-		t.Error("日志器不能为nil")
+		t.Fatal("日志器不能为nil")
 	}
 
 	if logger.GetLevel() != logrus.DebugLevel {
@@ -39,7 +42,7 @@ func TestNewWithInvalidLevel(t *testing.T) {
 		Output: "stdout",
 	}
 
-	logger, err := New(config)
+	logger, err := New(&config)
 	if err != nil {
 		t.Fatalf("创建日志器失败: %v", err)
 	}
@@ -61,13 +64,13 @@ func TestNewWithFileOutput(t *testing.T) {
 		Filename: logFile,
 	}
 
-	logger, err := New(config)
+	logger, err := New(&config)
 	if err != nil {
 		t.Fatalf("创建文件日志器失败: %v", err)
 	}
 
 	if logger == nil {
-		t.Error("日志器不能为nil")
+		t.Fatal("日志器不能为nil")
 	}
 
 	// 写入一条日志
@@ -89,13 +92,13 @@ func TestInit(t *testing.T) {
 		Output: "stdout",
 	}
 
-	err := Init(config)
+	err := Init(&config)
 	if err != nil {
 		t.Fatalf("初始化日志器失败: %v", err)
 	}
 
 	if globalLogger == nil {
-		t.Error("全局日志器未初始化")
+		t.Fatal("全局日志器未初始化")
 	}
 
 	if globalLogger.GetLevel() != logrus.WarnLevel {
@@ -110,7 +113,7 @@ func TestGet(t *testing.T) {
 	// 第一次调用Get应该创建默认日志器
 	logger := Get()
 	if logger == nil {
-		t.Error("Get()返回nil")
+		t.Fatal("Get()返回nil")
 	}
 
 	if logger.GetLevel() != logrus.InfoLevel {
@@ -120,13 +123,18 @@ func TestGet(t *testing.T) {
 
 func TestWithContext(t *testing.T) {
 	logger := Get()
-	ctx := context.WithValue(context.Background(), "request_id", "test-123")
-	ctx = context.WithValue(ctx, "user_id", "user-456")
-	ctx = context.WithValue(ctx, "trace_id", "trace-789")
+	const (
+		requestIDKey contextKey = "request_id"
+		userIDKey    contextKey = "user_id"
+		traceIDKey   contextKey = "trace_id"
+	)
+	ctx := context.WithValue(context.Background(), requestIDKey, "test-123")
+	ctx = context.WithValue(ctx, userIDKey, "user-456")
+	ctx = context.WithValue(ctx, traceIDKey, "trace-789")
 
 	entry := logger.WithContext(ctx)
 	if entry == nil {
-		t.Error("WithContext返回nil")
+		t.Fatal("WithContext返回nil")
 	}
 
 	// 验证上下文字段是否被添加
@@ -150,7 +158,7 @@ func TestWithFields(t *testing.T) {
 
 	entry := logger.WithFields(fields)
 	if entry == nil {
-		t.Error("WithFields返回nil")
+		t.Fatal("WithFields返回nil")
 	}
 
 	if entry.Data["component"] != "test" {
@@ -166,7 +174,7 @@ func TestWithField(t *testing.T) {
 	entry := logger.WithField("test_key", "test_value")
 
 	if entry == nil {
-		t.Error("WithField返回nil")
+		t.Fatal("WithField返回nil")
 	}
 
 	if entry.Data["test_key"] != "test_value" {
@@ -180,7 +188,7 @@ func TestWithError(t *testing.T) {
 	entry := logger.WithError(testErr)
 
 	if entry == nil {
-		t.Error("WithError返回nil")
+		t.Fatal("WithError返回nil")
 	}
 
 	if entry.Data["error"] != testErr {
@@ -199,7 +207,10 @@ func TestGlobalLogMethods(t *testing.T) {
 		Output: "stdout",
 	}
 
-	logger, _ := New(config)
+	logger, err := New(&config)
+	if err != nil {
+		t.Fatalf("创建日志器失败: %v", err)
+	}
 	logger.SetOutput(&buf)
 	globalLogger = logger
 
@@ -270,7 +281,8 @@ func TestGlobalWithMethods(t *testing.T) {
 		t.Error("全局WithError返回nil")
 	}
 
-	ctx := context.WithValue(context.Background(), "global_id", "123")
+	const globalIDKey contextKey = "global_id"
+	ctx := context.WithValue(context.Background(), globalIDKey, "123")
 	entry = WithContext(ctx)
 	if entry == nil {
 		t.Error("全局WithContext返回nil")
@@ -295,7 +307,10 @@ func TestSetGlobalLevel(t *testing.T) {
 }
 
 func TestGetGlobalLevel(t *testing.T) {
-	SetGlobalLevel("debug")
+	err := SetGlobalLevel("debug")
+	if err != nil {
+		t.Fatalf("设置日志级别失败: %v", err)
+	}
 	level := GetGlobalLevel()
 	if level != "debug" {
 		t.Errorf("期望日志级别为debug，实际为%s", level)
@@ -317,7 +332,7 @@ max_backups: 10
 compress: true
 `
 
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	err := os.WriteFile(configFile, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("创建配置文件失败: %v", err)
 	}

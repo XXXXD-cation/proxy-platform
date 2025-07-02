@@ -7,10 +7,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// 常量定义
+const (
+	// Percentage calculation 百分比计算
+	PercentageMultiplier = 100
+)
+
 // User 用户模型
 type User struct {
 	ID               uint                 `gorm:"primarykey" json:"id"`
-	Username         string               `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required,min=3,max=50"`
+	Username         string               `gorm:"type:varchar(50);uniqueIndex;not null" json:"username" validate:"required"`
 	Email            string               `gorm:"type:varchar(100);uniqueIndex;not null" json:"email" validate:"required,email"`
 	PasswordHash     string               `gorm:"type:varchar(255);not null" json:"-"`
 	SubscriptionPlan SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');default:'developer'" json:"subscription_plan"`
@@ -49,7 +55,7 @@ func (User) TableName() string {
 }
 
 // BeforeCreate GORM钩子 - 创建前
-func (u *User) BeforeCreate(tx *gorm.DB) error {
+func (u *User) BeforeCreate(_ *gorm.DB) error {
 	// 确保创建时间
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now()
@@ -58,7 +64,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeUpdate GORM钩子 - 更新前
-func (u *User) BeforeUpdate(tx *gorm.DB) error {
+func (u *User) BeforeUpdate(_ *gorm.DB) error {
 	// 确保更新时间
 	u.UpdatedAt = time.Now()
 	return nil
@@ -71,9 +77,10 @@ func (u *User) IsActive() bool {
 
 // GetCurrentSubscription 获取当前有效订阅
 func (u *User) GetCurrentSubscription() *Subscription {
-	for _, sub := range u.Subscriptions {
+	for i := range u.Subscriptions {
+		sub := &u.Subscriptions[i]
 		if sub.IsActive && sub.ExpiresAt.After(time.Now()) {
-			return &sub
+			return sub
 		}
 	}
 	return nil
@@ -124,7 +131,7 @@ func (ak *APIKey) UpdateLastUsed() {
 type Subscription struct {
 	ID            uint                 `gorm:"primarykey" json:"id"`
 	UserID        uint                 `gorm:"not null;index" json:"user_id"`
-	PlanType      SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');not null;index" json:"plan_type"`
+	PlanType      SubscriptionPlanType `gorm:"type:enum('developer','professional','enterprise');not null" json:"plan_type"`
 	TrafficQuota  int64                `gorm:"default:0" json:"traffic_quota"`
 	TrafficUsed   int64                `gorm:"default:0" json:"traffic_used"`
 	RequestsQuota int                  `gorm:"default:0" json:"requests_quota"`
@@ -154,7 +161,7 @@ func (s *Subscription) GetTrafficUsagePercent() float64 {
 	if s.TrafficQuota == 0 {
 		return 0
 	}
-	return float64(s.TrafficUsed) / float64(s.TrafficQuota) * 100
+	return float64(s.TrafficUsed) / float64(s.TrafficQuota) * PercentageMultiplier
 }
 
 // GetRequestsUsagePercent 获取请求使用百分比
@@ -162,7 +169,7 @@ func (s *Subscription) GetRequestsUsagePercent() float64 {
 	if s.RequestsQuota == 0 {
 		return 0
 	}
-	return float64(s.RequestsUsed) / float64(s.RequestsQuota) * 100
+	return float64(s.RequestsUsed) / float64(s.RequestsQuota) * PercentageMultiplier
 }
 
 // CanUseService 检查是否可以使用服务

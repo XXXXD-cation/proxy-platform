@@ -51,7 +51,7 @@ log:
   compress: true
 `
 
-	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	err := os.WriteFile(configFile, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("创建配置文件失败: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestLoadInvalidYAML(t *testing.T) {
 	configFile := filepath.Join(tempDir, "invalid_config.yaml")
 
 	invalidContent := `invalid yaml content: [[[`
-	err := os.WriteFile(configFile, []byte(invalidContent), 0644)
+	err := os.WriteFile(configFile, []byte(invalidContent), 0o600)
 	if err != nil {
 		t.Fatalf("创建无效配置文件失败: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestLoadFromDir(t *testing.T) {
 	tempDir := t.TempDir()
 	serviceDir := filepath.Join(tempDir, "test_service")
 
-	err := os.MkdirAll(serviceDir, 0755)
+	err := os.MkdirAll(serviceDir, 0o755)
 	if err != nil {
 		t.Fatalf("创建服务目录失败: %v", err)
 	}
@@ -130,7 +130,7 @@ log:
   level: "debug"
 `
 
-	err = os.WriteFile(configFile, []byte(configContent), 0644)
+	err = os.WriteFile(configFile, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("创建配置文件失败: %v", err)
 	}

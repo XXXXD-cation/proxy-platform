@@ -9,8 +9,15 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+// 常量定义
+const (
+	// Command line arguments 命令行参数
+	MinArgsForCommand = 2 // 最少命令参数数量
+	MinArgsForCreate  = 3 // 创建命令最少参数数量
+)
+
 func main() {
-	if len(os.Args) < 2 {
+	if len(os.Args) < MinArgsForCommand {
 		log.Fatal("Usage: go run migrate.go [up|down|create NAME]")
 	}
 
@@ -28,7 +35,7 @@ func main() {
 	case "down":
 		migrateDown(dsn)
 	case "create":
-		if len(os.Args) < 3 {
+		if len(os.Args) < MinArgsForCreate {
 			log.Fatal("Please provide migration name: go run migrate.go create migration_name")
 		}
 		createMigration(os.Args[2])
@@ -38,9 +45,17 @@ func main() {
 }
 
 func migrateUp(dsn string) {
+	err := performMigration(dsn)
+	if err != nil {
+		log.Fatalf("Migration failed: %v", err)
+	}
+	fmt.Println("✅ Database migration completed successfully!")
+}
+
+func performMigration(dsn string) error {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {
@@ -50,8 +65,46 @@ func migrateUp(dsn string) {
 
 	fmt.Println("Executing database migrations...")
 
-	// 创建用户表
-	createUsersTable := `
+	if err := createTables(db); err != nil {
+		return err
+	}
+
+	// 插入默认数据
+	insertDefaultData(db)
+
+	return nil
+}
+
+func createTables(db *sql.DB) error {
+	tables := getTableDefinitions()
+
+	for _, table := range tables {
+		fmt.Printf("Creating table: %s\n", table.name)
+		if _, err := db.Exec(table.sql); err != nil {
+			return fmt.Errorf("failed to create table %s: %v", table.name, err)
+		}
+	}
+	return nil
+}
+
+func getTableDefinitions() []struct {
+	name string
+	sql  string
+} {
+	return []struct {
+		name string
+		sql  string
+	}{
+		{"users", getUsersTableSQL()},
+		{"api_keys", getAPIKeysTableSQL()},
+		{"subscriptions", getSubscriptionsTableSQL()},
+		{"usage_logs", getUsageLogsTableSQL()},
+		{"proxy_ips", getProxyIPsTableSQL()},
+	}
+}
+
+func getUsersTableSQL() string {
+	return `
 		CREATE TABLE IF NOT EXISTS users (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			username VARCHAR(50) UNIQUE NOT NULL,
@@ -66,9 +119,10 @@ func migrateUp(dsn string) {
 			INDEX idx_status (status)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
+}
 
-	// 创建API密钥表
-	createAPIKeysTable := `
+func getAPIKeysTableSQL() string {
+	return `
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,
@@ -86,9 +140,10 @@ func migrateUp(dsn string) {
 			INDEX idx_is_active (is_active)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
+}
 
-	// 创建订阅表
-	createSubscriptionsTable := `
+func getSubscriptionsTableSQL() string {
+	return `
 		CREATE TABLE IF NOT EXISTS subscriptions (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,
@@ -108,9 +163,10 @@ func migrateUp(dsn string) {
 			INDEX idx_is_active (is_active)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
+}
 
-	// 创建使用日志表
-	createUsageLogsTable := `
+func getUsageLogsTableSQL() string {
+	return `
 		CREATE TABLE IF NOT EXISTS usage_logs (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,
@@ -130,9 +186,10 @@ func migrateUp(dsn string) {
 			INDEX idx_proxy_ip (proxy_ip)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
+}
 
-	// 创建代理IP表
-	createProxyIPsTable := `
+func getProxyIPsTableSQL() string {
+	return `
 		CREATE TABLE IF NOT EXISTS proxy_ips (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			ip_address VARCHAR(45) NOT NULL,
@@ -157,29 +214,6 @@ func migrateUp(dsn string) {
 			INDEX idx_is_active (is_active)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
-
-	tables := []struct {
-		name string
-		sql  string
-	}{
-		{"users", createUsersTable},
-		{"api_keys", createAPIKeysTable},
-		{"subscriptions", createSubscriptionsTable},
-		{"usage_logs", createUsageLogsTable},
-		{"proxy_ips", createProxyIPsTable},
-	}
-
-	for _, table := range tables {
-		fmt.Printf("Creating table: %s\n", table.name)
-		if _, err := db.Exec(table.sql); err != nil {
-			log.Fatalf("Failed to create table %s: %v", table.name, err)
-		}
-	}
-
-	// 插入默认数据
-	insertDefaultData(db)
-
-	fmt.Println("✅ Database migration completed successfully!")
 }
 
 func migrateDown(dsn string) {
@@ -219,7 +253,9 @@ func insertDefaultData(db *sql.DB) {
 	// 创建默认管理员用户
 	adminSQL := `
 		INSERT IGNORE INTO users (username, email, password_hash, subscription_plan, status) 
-		VALUES ('admin', 'admin@proxy-platform.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'enterprise', 'active')
+		VALUES ('admin', 'admin@proxy-platform.com', 
+		'$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 
+		'enterprise', 'active')
 	`
 	if _, err := db.Exec(adminSQL); err != nil {
 		log.Printf("Warning: Failed to create admin user: %v", err)

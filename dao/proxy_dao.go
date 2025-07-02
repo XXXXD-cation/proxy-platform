@@ -1,3 +1,4 @@
+// Package dao 提供数据访问层
 package dao
 
 import (
@@ -8,6 +9,20 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/XXXXD-cation/proxy-platform/models"
+)
+
+// 常量定义
+const (
+	// Proxy quality thresholds 代理质量阈值
+	MinSuccessRateThreshold  = 50.0 // 最小成功率阈值
+	MinQualityScoreThreshold = 0.7  // 最小质量评分阈值
+	UnhealthyRateThreshold   = 30.0 // 不健康成功率阈值
+
+	// Time constants 时间常量
+	HoursPerDay = 24 // 每天小时数
+
+	// Percentage calculation 百分比计算
+	PercentageMultiplier = 100 // 百分比乘数
 )
 
 // ProxyDAO 代理数据访问对象
@@ -108,7 +123,8 @@ func (dao *ProxyDAO) List(ctx context.Context, offset, limit int) ([]*models.Pro
 }
 
 // GetActiveProxies 获取活跃的代理列表
-func (dao *ProxyDAO) GetActiveProxies(ctx context.Context, sourceType models.ProxySourceType) ([]*models.ProxyIP, error) {
+func (dao *ProxyDAO) GetActiveProxies(ctx context.Context,
+	sourceType models.ProxySourceType) ([]*models.ProxyIP, error) {
 	var proxies []*models.ProxyIP
 	query := dao.db.WithContext(ctx).Where("is_active = ?", true)
 
@@ -124,7 +140,7 @@ func (dao *ProxyDAO) GetActiveProxies(ctx context.Context, sourceType models.Pro
 func (dao *ProxyDAO) GetHealthyProxies(ctx context.Context, minQualityScore float64) ([]*models.ProxyIP, error) {
 	var proxies []*models.ProxyIP
 	err := dao.db.WithContext(ctx).
-		Where("is_active = ? AND quality_score >= ? AND success_rate >= ?", true, minQualityScore, 50.0).
+		Where("is_active = ? AND quality_score >= ? AND success_rate >= ?", true, minQualityScore, MinSuccessRateThreshold).
 		Order("quality_score DESC, avg_latency_ms ASC").
 		Find(&proxies).Error
 	return proxies, err
@@ -187,15 +203,16 @@ func (dao *ProxyDAO) MarkAsChecked(ctx context.Context, id uint) error {
 func (dao *ProxyDAO) DeactivateUnhealthyProxies(ctx context.Context, minScore float64) error {
 	return dao.db.WithContext(ctx).
 		Model(&models.ProxyIP{}).
-		Where("quality_score < ? OR success_rate < ?", minScore, 30.0).
+		Where("quality_score < ? OR success_rate < ?", minScore, UnhealthyRateThreshold).
 		Update("is_active", false).Error
 }
 
 // GetBestProxies 获取最佳代理列表
-func (dao *ProxyDAO) GetBestProxies(ctx context.Context, limit int, sourceType models.ProxySourceType) ([]*models.ProxyIP, error) {
+func (dao *ProxyDAO) GetBestProxies(ctx context.Context, limit int,
+	sourceType models.ProxySourceType) ([]*models.ProxyIP, error) {
 	var proxies []*models.ProxyIP
 	query := dao.db.WithContext(ctx).
-		Where("is_active = ? AND quality_score >= ?", true, 0.7)
+		Where("is_active = ? AND quality_score >= ?", true, MinQualityScoreThreshold)
 
 	if sourceType != "" {
 		query = query.Where("source_type = ?", sourceType)
@@ -259,7 +276,8 @@ func (dao *UsageLogDAO) GetByUserID(ctx context.Context, userID uint, offset, li
 }
 
 // GetStatsByUserID 获取用户指定时间范围的统计
-func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint, startTime, endTime time.Time) (*UsageStats, error) {
+func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint,
+	startTime, endTime time.Time) (*UsageStats, error) {
 	var stats UsageStats
 
 	// 计算总请求数和成功请求数
@@ -280,7 +298,7 @@ func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint, start
 
 	// 计算成功率
 	if stats.TotalRequests > 0 {
-		stats.SuccessRate = float64(stats.SuccessRequests) / float64(stats.TotalRequests) * 100
+		stats.SuccessRate = float64(stats.SuccessRequests) / float64(stats.TotalRequests) * PercentageMultiplier
 	}
 
 	return &stats, nil
@@ -290,7 +308,7 @@ func (dao *UsageLogDAO) GetStatsByUserID(ctx context.Context, userID uint, start
 func (dao *UsageLogDAO) GetTodayStats(ctx context.Context, userID uint) (*UsageStats, error) {
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
+	endOfDay := startOfDay.Add(HoursPerDay * time.Hour)
 
 	return dao.GetStatsByUserID(ctx, userID, startOfDay, endOfDay)
 }
@@ -332,7 +350,8 @@ func (dao *ProxyHealthCheckDAO) Create(ctx context.Context, check *models.ProxyH
 }
 
 // GetByProxyID 根据代理ID获取健康检查历史
-func (dao *ProxyHealthCheckDAO) GetByProxyID(ctx context.Context, proxyID uint, limit int) ([]*models.ProxyHealthCheck, error) {
+func (dao *ProxyHealthCheckDAO) GetByProxyID(ctx context.Context, proxyID uint,
+	limit int) ([]*models.ProxyHealthCheck, error) {
 	var checks []*models.ProxyHealthCheck
 	err := dao.db.WithContext(ctx).
 		Where("proxy_ip_id = ?", proxyID).

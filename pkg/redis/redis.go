@@ -9,13 +9,34 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-// RedisClient Redis客户端封装
-type RedisClient struct {
+const (
+	// DefaultPoolSize 默认连接池大小
+	DefaultPoolSize = 10
+	// DefaultMinIdle 默认最小空闲连接数
+	DefaultMinIdle = 5
+	// DefaultMaxRetries 默认最大重试次数
+	DefaultMaxRetries = 3
+	// DefaultDialTimeout 默认拨号超时时间（秒）
+	DefaultDialTimeout = 5
+	// DefaultReadTimeout 默认读取超时时间（秒）
+	DefaultReadTimeout = 3
+	// DefaultWriteTimeout 默认写入超时时间（秒）
+	DefaultWriteTimeout = 3
+	// DefaultPoolTimeout 默认连接池超时时间（秒）
+	DefaultPoolTimeout = 4
+	// DefaultIdleTimeout 默认空闲超时时间（分钟）
+	DefaultIdleTimeout = 5
+	// DefaultPingTimeout 默认Ping超时时间（秒）
+	DefaultPingTimeout = 5
+)
+
+// Client Redis客户端封装
+type Client struct {
 	*redis.Client
 }
 
-// RedisConfig Redis配置
-type RedisConfig struct {
+// Config Redis配置
+type Config struct {
 	Host        string `yaml:"host"`
 	Port        int    `yaml:"port"`
 	Password    string `yaml:"password"`
@@ -26,22 +47,22 @@ type RedisConfig struct {
 	DialTimeout int    `yaml:"dial_timeout"`
 }
 
-var globalClient *RedisClient
+var globalClient *Client
 
-// NewRedisClient 创建Redis客户端
-func NewRedisClient(config RedisConfig) (*RedisClient, error) {
+// NewClient 创建Redis客户端
+func NewClient(config *Config) (*Client, error) {
 	// 设置默认值
 	if config.PoolSize <= 0 {
-		config.PoolSize = 10
+		config.PoolSize = DefaultPoolSize
 	}
 	if config.MinIdle <= 0 {
-		config.MinIdle = 5
+		config.MinIdle = DefaultMinIdle
 	}
 	if config.MaxRetries <= 0 {
-		config.MaxRetries = 3
+		config.MaxRetries = DefaultMaxRetries
 	}
 	if config.DialTimeout <= 0 {
-		config.DialTimeout = 5
+		config.DialTimeout = DefaultDialTimeout
 	}
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
@@ -54,26 +75,26 @@ func NewRedisClient(config RedisConfig) (*RedisClient, error) {
 		MinIdleConns: config.MinIdle,
 		MaxRetries:   config.MaxRetries,
 		DialTimeout:  time.Duration(config.DialTimeout) * time.Second,
-		ReadTimeout:  time.Second * 3,
-		WriteTimeout: time.Second * 3,
-		PoolTimeout:  time.Second * 4,
-		IdleTimeout:  time.Minute * 5,
+		ReadTimeout:  DefaultReadTimeout * time.Second,
+		WriteTimeout: DefaultWriteTimeout * time.Second,
+		PoolTimeout:  DefaultPoolTimeout * time.Second,
+		IdleTimeout:  DefaultIdleTimeout * time.Minute,
 	})
 
 	// 测试连接
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultPingTimeout*time.Second)
 	defer cancel()
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("redis连接失败: %v", err)
 	}
 
-	return &RedisClient{Client: rdb}, nil
+	return &Client{Client: rdb}, nil
 }
 
 // Init 初始化全局Redis客户端
-func Init(config RedisConfig) error {
-	client, err := NewRedisClient(config)
+func Init(config *Config) error {
+	client, err := NewClient(config)
 	if err != nil {
 		return err
 	}
@@ -82,7 +103,7 @@ func Init(config RedisConfig) error {
 }
 
 // Get 获取全局Redis客户端
-func Get() *RedisClient {
+func Get() *Client {
 	if globalClient == nil {
 		panic("Redis客户端未初始化，请先调用 Init")
 	}
@@ -90,231 +111,236 @@ func Get() *RedisClient {
 }
 
 // Close 关闭Redis连接
-func (r *RedisClient) Close() error {
-	return r.Client.Close()
+func (c *Client) Close() error {
+	return c.Client.Close()
 }
 
 // SetWithExpire 设置键值对并指定过期时间
-func (r *RedisClient) SetWithExpire(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
-	return r.Set(ctx, key, value, expiration).Err()
+func (c *Client) SetWithExpire(ctx context.Context, key string, value interface{},
+	expiration time.Duration) error {
+	return c.Set(ctx, key, value, expiration).Err()
 }
 
 // GetString 获取字符串值
-func (r *RedisClient) GetString(ctx context.Context, key string) (string, error) {
-	return r.Get(ctx, key).Result()
+func (c *Client) GetString(ctx context.Context, key string) (string, error) {
+	return c.Get(ctx, key).Result()
 }
 
 // GetInt 获取整数值
-func (r *RedisClient) GetInt(ctx context.Context, key string) (int, error) {
-	return r.Get(ctx, key).Int()
+func (c *Client) GetInt(ctx context.Context, key string) (int, error) {
+	return c.Get(ctx, key).Int()
 }
 
 // GetInt64 获取长整数值
-func (r *RedisClient) GetInt64(ctx context.Context, key string) (int64, error) {
-	return r.Get(ctx, key).Int64()
+func (c *Client) GetInt64(ctx context.Context, key string) (int64, error) {
+	return c.Get(ctx, key).Int64()
 }
 
 // GetFloat64 获取浮点数值
-func (r *RedisClient) GetFloat64(ctx context.Context, key string) (float64, error) {
-	return r.Get(ctx, key).Float64()
+func (c *Client) GetFloat64(ctx context.Context, key string) (float64, error) {
+	return c.Get(ctx, key).Float64()
 }
 
 // Exists 检查键是否存在
-func (r *RedisClient) Exists(ctx context.Context, keys ...string) (int64, error) {
-	return r.Client.Exists(ctx, keys...).Result()
+func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
+	return c.Client.Exists(ctx, keys...).Result()
 }
 
 // Delete 删除键
-func (r *RedisClient) Delete(ctx context.Context, keys ...string) (int64, error) {
-	return r.Del(ctx, keys...).Result()
+func (c *Client) Delete(ctx context.Context, keys ...string) (int64, error) {
+	return c.Del(ctx, keys...).Result()
 }
 
 // Increment 原子递增
-func (r *RedisClient) Increment(ctx context.Context, key string) (int64, error) {
-	return r.Incr(ctx, key).Result()
+func (c *Client) Increment(ctx context.Context, key string) (int64, error) {
+	return c.Incr(ctx, key).Result()
 }
 
 // IncrementBy 原子递增指定值
-func (r *RedisClient) IncrementBy(ctx context.Context, key string, value int64) (int64, error) {
-	return r.IncrBy(ctx, key, value).Result()
+func (c *Client) IncrementBy(ctx context.Context, key string, value int64) (int64, error) {
+	return c.IncrBy(ctx, key, value).Result()
 }
 
 // Decrement 原子递减
-func (r *RedisClient) Decrement(ctx context.Context, key string) (int64, error) {
-	return r.Decr(ctx, key).Result()
+func (c *Client) Decrement(ctx context.Context, key string) (int64, error) {
+	return c.Decr(ctx, key).Result()
 }
 
 // DecrementBy 原子递减指定值
-func (r *RedisClient) DecrementBy(ctx context.Context, key string, value int64) (int64, error) {
-	return r.DecrBy(ctx, key, value).Result()
+func (c *Client) DecrementBy(ctx context.Context, key string, value int64) (int64, error) {
+	return c.DecrBy(ctx, key, value).Result()
 }
 
 // SetNX 设置键值对，仅当键不存在时
-func (r *RedisClient) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
-	return r.Client.SetNX(ctx, key, value, expiration).Result()
+func (c *Client) SetNX(ctx context.Context, key string, value interface{},
+	expiration time.Duration) (bool, error) {
+	return c.Client.SetNX(ctx, key, value, expiration).Result()
 }
 
 // GetSet 设置新值并返回旧值
-func (r *RedisClient) GetSet(ctx context.Context, key string, value interface{}) (string, error) {
-	return r.Client.GetSet(ctx, key, value).Result()
+func (c *Client) GetSet(ctx context.Context, key string, value interface{}) (string, error) {
+	return c.Client.GetSet(ctx, key, value).Result()
 }
 
 // Expire 设置键的过期时间
-func (r *RedisClient) Expire(ctx context.Context, key string, expiration time.Duration) (bool, error) {
-	return r.Client.Expire(ctx, key, expiration).Result()
+func (c *Client) Expire(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	return c.Client.Expire(ctx, key, expiration).Result()
 }
 
 // TTL 获取键的剩余过期时间
-func (r *RedisClient) TTL(ctx context.Context, key string) (time.Duration, error) {
-	return r.Client.TTL(ctx, key).Result()
+func (c *Client) TTL(ctx context.Context, key string) (time.Duration, error) {
+	return c.Client.TTL(ctx, key).Result()
 }
 
 // HSet 设置哈希字段
-func (r *RedisClient) HSet(ctx context.Context, key string, values ...interface{}) (int64, error) {
-	return r.Client.HSet(ctx, key, values...).Result()
+func (c *Client) HSet(ctx context.Context, key string, values ...interface{}) (int64, error) {
+	return c.Client.HSet(ctx, key, values...).Result()
 }
 
 // HGet 获取哈希字段值
-func (r *RedisClient) HGet(ctx context.Context, key, field string) (string, error) {
-	return r.Client.HGet(ctx, key, field).Result()
+func (c *Client) HGet(ctx context.Context, key, field string) (string, error) {
+	return c.Client.HGet(ctx, key, field).Result()
 }
 
 // HGetAll 获取哈希所有字段
-func (r *RedisClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
-	return r.Client.HGetAll(ctx, key).Result()
+func (c *Client) HGetAll(ctx context.Context, key string) (map[string]string, error) {
+	return c.Client.HGetAll(ctx, key).Result()
 }
 
 // HDel 删除哈希字段
-func (r *RedisClient) HDel(ctx context.Context, key string, fields ...string) (int64, error) {
-	return r.Client.HDel(ctx, key, fields...).Result()
+func (c *Client) HDel(ctx context.Context, key string, fields ...string) (int64, error) {
+	return c.Client.HDel(ctx, key, fields...).Result()
 }
 
 // HExists 检查哈希字段是否存在
-func (r *RedisClient) HExists(ctx context.Context, key, field string) (bool, error) {
-	return r.Client.HExists(ctx, key, field).Result()
+func (c *Client) HExists(ctx context.Context, key, field string) (bool, error) {
+	return c.Client.HExists(ctx, key, field).Result()
 }
 
 // LPush 从列表左侧推入元素
-func (r *RedisClient) LPush(ctx context.Context, key string, values ...interface{}) (int64, error) {
-	return r.Client.LPush(ctx, key, values...).Result()
+func (c *Client) LPush(ctx context.Context, key string, values ...interface{}) (int64, error) {
+	return c.Client.LPush(ctx, key, values...).Result()
 }
 
 // RPush 从列表右侧推入元素
-func (r *RedisClient) RPush(ctx context.Context, key string, values ...interface{}) (int64, error) {
-	return r.Client.RPush(ctx, key, values...).Result()
+func (c *Client) RPush(ctx context.Context, key string, values ...interface{}) (int64, error) {
+	return c.Client.RPush(ctx, key, values...).Result()
 }
 
 // LPop 从列表左侧弹出元素
-func (r *RedisClient) LPop(ctx context.Context, key string) (string, error) {
-	return r.Client.LPop(ctx, key).Result()
+func (c *Client) LPop(ctx context.Context, key string) (string, error) {
+	return c.Client.LPop(ctx, key).Result()
 }
 
 // RPop 从列表右侧弹出元素
-func (r *RedisClient) RPop(ctx context.Context, key string) (string, error) {
-	return r.Client.RPop(ctx, key).Result()
+func (c *Client) RPop(ctx context.Context, key string) (string, error) {
+	return c.Client.RPop(ctx, key).Result()
 }
 
 // LLen 获取列表长度
-func (r *RedisClient) LLen(ctx context.Context, key string) (int64, error) {
-	return r.Client.LLen(ctx, key).Result()
+func (c *Client) LLen(ctx context.Context, key string) (int64, error) {
+	return c.Client.LLen(ctx, key).Result()
 }
 
 // LRange 获取列表范围内的元素
-func (r *RedisClient) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
-	return r.Client.LRange(ctx, key, start, stop).Result()
+func (c *Client) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
+	return c.Client.LRange(ctx, key, start, stop).Result()
 }
 
-// SAdd 向集合添加元素
-func (r *RedisClient) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
-	return r.Client.SAdd(ctx, key, members...).Result()
+// SAdd 添加集合成员
+func (c *Client) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	return c.Client.SAdd(ctx, key, members...).Result()
 }
 
-// SRem 从集合移除元素
-func (r *RedisClient) SRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
-	return r.Client.SRem(ctx, key, members...).Result()
+// SRem 移除集合成员
+func (c *Client) SRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	return c.Client.SRem(ctx, key, members...).Result()
 }
 
-// SMembers 获取集合所有元素
-func (r *RedisClient) SMembers(ctx context.Context, key string) ([]string, error) {
-	return r.Client.SMembers(ctx, key).Result()
+// SMembers 获取集合所有成员
+func (c *Client) SMembers(ctx context.Context, key string) ([]string, error) {
+	return c.Client.SMembers(ctx, key).Result()
 }
 
-// SIsMember 检查元素是否在集合中
-func (r *RedisClient) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
-	return r.Client.SIsMember(ctx, key, member).Result()
+// SIsMember 检查是否为集合成员
+func (c *Client) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
+	return c.Client.SIsMember(ctx, key, member).Result()
 }
 
-// SCard 获取集合元素数量
-func (r *RedisClient) SCard(ctx context.Context, key string) (int64, error) {
-	return r.Client.SCard(ctx, key).Result()
+// SCard 获取集合成员数量
+func (c *Client) SCard(ctx context.Context, key string) (int64, error) {
+	return c.Client.SCard(ctx, key).Result()
 }
 
-// ZAdd 向有序集合添加元素
-func (r *RedisClient) ZAdd(ctx context.Context, key string, members ...*redis.Z) (int64, error) {
-	return r.Client.ZAdd(ctx, key, members...).Result()
+// ZAdd 添加有序集合成员
+func (c *Client) ZAdd(ctx context.Context, key string, members ...*redis.Z) (int64, error) {
+	return c.Client.ZAdd(ctx, key, members...).Result()
 }
 
-// ZRange 获取有序集合范围内的元素
-func (r *RedisClient) ZRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
-	return r.Client.ZRange(ctx, key, start, stop).Result()
+// ZRange 获取有序集合范围内的成员
+func (c *Client) ZRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
+	return c.Client.ZRange(ctx, key, start, stop).Result()
 }
 
-// ZRangeWithScores 获取有序集合范围内的元素和分数
-func (r *RedisClient) ZRangeWithScores(ctx context.Context, key string, start, stop int64) ([]redis.Z, error) {
-	return r.Client.ZRangeWithScores(ctx, key, start, stop).Result()
+// ZRangeWithScores 获取有序集合范围内的成员和分数
+func (c *Client) ZRangeWithScores(ctx context.Context, key string,
+	start, stop int64) ([]redis.Z, error) {
+	return c.Client.ZRangeWithScores(ctx, key, start, stop).Result()
 }
 
-// ZRem 从有序集合移除元素
-func (r *RedisClient) ZRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
-	return r.Client.ZRem(ctx, key, members...).Result()
+// ZRem 移除有序集合成员
+func (c *Client) ZRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	return c.Client.ZRem(ctx, key, members...).Result()
 }
 
-// ZCard 获取有序集合元素数量
-func (r *RedisClient) ZCard(ctx context.Context, key string) (int64, error) {
-	return r.Client.ZCard(ctx, key).Result()
+// ZCard 获取有序集合成员数量
+func (c *Client) ZCard(ctx context.Context, key string) (int64, error) {
+	return c.Client.ZCard(ctx, key).Result()
 }
 
-// ZScore 获取有序集合中元素的分数
-func (r *RedisClient) ZScore(ctx context.Context, key, member string) (float64, error) {
-	return r.Client.ZScore(ctx, key, member).Result()
+// ZScore 获取有序集合成员分数
+func (c *Client) ZScore(ctx context.Context, key, member string) (float64, error) {
+	return c.Client.ZScore(ctx, key, member).Result()
 }
 
 // Publish 发布消息到频道
-func (r *RedisClient) Publish(ctx context.Context, channel string, message interface{}) (int64, error) {
-	return r.Client.Publish(ctx, channel, message).Result()
+func (c *Client) Publish(ctx context.Context, channel string, message interface{}) (int64, error) {
+	return c.Client.Publish(ctx, channel, message).Result()
 }
 
 // Subscribe 订阅频道
-func (r *RedisClient) Subscribe(ctx context.Context, channels ...string) *redis.PubSub {
-	return r.Client.Subscribe(ctx, channels...)
+func (c *Client) Subscribe(ctx context.Context, channels ...string) *redis.PubSub {
+	return c.Client.Subscribe(ctx, channels...)
 }
 
 // PSubscribe 模式订阅
-func (r *RedisClient) PSubscribe(ctx context.Context, patterns ...string) *redis.PubSub {
-	return r.Client.PSubscribe(ctx, patterns...)
+func (c *Client) PSubscribe(ctx context.Context, patterns ...string) *redis.PubSub {
+	return c.Client.PSubscribe(ctx, patterns...)
 }
 
 // Eval 执行Lua脚本
-func (r *RedisClient) Eval(ctx context.Context, script string, keys []string, args ...interface{}) *redis.Cmd {
-	return r.Client.Eval(ctx, script, keys, args...)
+func (c *Client) Eval(ctx context.Context, script string, keys []string,
+	args ...interface{}) *redis.Cmd {
+	return c.Client.Eval(ctx, script, keys, args...)
 }
 
-// EvalSha 执行Lua脚本SHA
-func (r *RedisClient) EvalSha(ctx context.Context, sha1 string, keys []string, args ...interface{}) *redis.Cmd {
-	return r.Client.EvalSha(ctx, sha1, keys, args...)
+// EvalSha 执行已缓存的Lua脚本
+func (c *Client) EvalSha(ctx context.Context, sha1 string, keys []string,
+	args ...interface{}) *redis.Cmd {
+	return c.Client.EvalSha(ctx, sha1, keys, args...)
 }
 
-// Pipeline 创建管道
-func (r *RedisClient) Pipeline() redis.Pipeliner {
-	return r.Client.Pipeline()
+// Pipeline 获取管道
+func (c *Client) Pipeline() redis.Pipeliner {
+	return c.Client.Pipeline()
 }
 
-// TxPipeline 创建事务管道
-func (r *RedisClient) TxPipeline() redis.Pipeliner {
-	return r.Client.TxPipeline()
+// TxPipeline 获取事务管道
+func (c *Client) TxPipeline() redis.Pipeliner {
+	return c.Client.TxPipeline()
 }
 
-// Watch 监视键并执行事务
-func (r *RedisClient) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
-	return r.Client.Watch(ctx, fn, keys...)
+// Watch 监视键的变化
+func (c *Client) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
+	return c.Client.Watch(ctx, fn, keys...)
 }
