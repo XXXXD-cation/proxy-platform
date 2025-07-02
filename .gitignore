@@ -36,3 +36,8 @@ log.md
 
 # cursor
 .cursor/
+
+# Frontend build cache
+web/.vite/
+web/node_modules/
+web/dist/
