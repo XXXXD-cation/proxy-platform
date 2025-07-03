@@ -11,9 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// 定义context key类型
-type contextKey string
-
 func TestNew(t *testing.T) {
 	config := LogConfig{
 		Level:  "debug",

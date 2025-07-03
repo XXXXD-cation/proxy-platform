@@ -19,6 +19,16 @@ const (
 	FilePermission = 0o666 // 文件权限
 )
 
+// 定义context key类型
+type contextKey string
+
+// 定义常用的context key
+const (
+	requestIDKey contextKey = "request_id"
+	userIDKey    contextKey = "user_id"
+	traceIDKey   contextKey = "trace_id"
+)
+
 // Logger 日志管理器
 type Logger struct {
 	*logrus.Logger
@@ -133,15 +143,15 @@ func (l *Logger) WithContext(ctx context.Context) *logrus.Entry {
 	entry := l.Logger.WithContext(ctx)
 
 	// 从上下文中提取常用字段
-	if requestID := ctx.Value("request_id"); requestID != nil {
+	if requestID := ctx.Value(requestIDKey); requestID != nil {
 		entry = entry.WithField("request_id", requestID)
 	}
 
-	if userID := ctx.Value("user_id"); userID != nil {
+	if userID := ctx.Value(userIDKey); userID != nil {
 		entry = entry.WithField("user_id", userID)
 	}
 
-	if traceID := ctx.Value("trace_id"); traceID != nil {
+	if traceID := ctx.Value(traceIDKey); traceID != nil {
 		entry = entry.WithField("trace_id", traceID)
 	}
 
