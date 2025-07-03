@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened]
 
 env:
-  GO_VERSION: '1.24.3'
+  GO_VERSION: '1.24.4'
   NODE_VERSION: '22'
   GOLANGCI_LINT_VERSION: 'v1.64.8'
 
@@ -86,7 +86,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root123456
-          MYSQL_DATABASE: proxy_platform_test
+          MYSQL_DATABASE: proxy_platform
           MYSQL_USER: proxy_user
           MYSQL_PASSWORD: proxy_pass123
         ports:
