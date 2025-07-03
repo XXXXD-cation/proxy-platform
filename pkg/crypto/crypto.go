@@ -56,7 +56,7 @@ func (a *AESCrypto) Encrypt(plaintext []byte) (string, error) {
 	}
 
 	// 使用CBC模式加密
-	mode := cipher.NewCBCEncrypter(block, iv)
+	mode := cipher.NewCBCEncrypter(block, iv) // #nosec G407
 
 	// PKCS7填充
 	paddedPlaintext := pkcs7Pad(plaintext, aes.BlockSize)

@@ -153,9 +153,8 @@ func TestAPIKeyService_Generation(t *testing.T) {
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		db.Where("user_id = ?", userID).Delete(&APIKey{})
+		db.Where("id = ?", userID).Delete(&User{})
 	})
 }
 
@@ -183,9 +182,9 @@ func TestAPIKeyService_Validation(t *testing.T) {
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		userIDs := []int64{userID, userID2}
+		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
+		db.Where("id IN ?", userIDs).Delete(&User{})
 	})
 }
 
@@ -232,9 +231,8 @@ func TestAPIKeyService_Expiration(t *testing.T) {
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		db.Where("user_id = ?", userID).Delete(&APIKey{})
+		db.Where("id = ?", userID).Delete(&User{})
 	})
 }
 
@@ -278,21 +276,18 @@ func TestAPIKeyService_CachePerformance(t *testing.T) {
 	if secondDuration >= firstDuration {
 		t.Logf("⚠️ 缓存验证时间 (%v) 不比数据库查询时间 (%v) 快", secondDuration, firstDuration)
 	} else {
-		t.Logf("✅ 缓存验证时间 (%v) 比数据库查询时间 (%v) 快", secondDuration, firstDuration)
+		t.Logf("✅ 缓存验证比数据库查询快: %v vs %v", secondDuration, firstDuration)
 	}
 
-	// 验证延迟要求 <10ms
-	if secondDuration > 10*time.Millisecond {
-		t.Errorf("缓存验证延迟过高: %v (要求 <10ms)", secondDuration)
-	} else {
-		t.Logf("✅ 缓存验证延迟: %v (满足 <10ms 要求)", secondDuration)
+	if secondDuration > time.Millisecond*10 {
+		t.Errorf("缓存验证延迟过高: %v", secondDuration)
 	}
+	t.Logf("✅ 缓存验证延迟: %v (满足 <10ms 要求)", secondDuration)
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		db.Where("user_id = ?", userID).Delete(&APIKey{})
+		db.Where("id = ?", userID).Delete(&User{})
 	})
 }
 
@@ -300,29 +295,28 @@ func TestAPIKeyService_CachePerformance(t *testing.T) {
 func TestAPIKeyService_Concurrent(t *testing.T) {
 	db := setupTestDB(t)
 	rdb := setupTestRedis(t)
-
 	service := NewAPIKeyService(rdb, db)
+
+	numGoroutines := 10
+	baseUserID := int64(33333)
 
 	// 并发生成API Key
 	t.Run("并发生成API Key", func(t *testing.T) {
-		concurrency := 10
-		userID := int64(33333)
-
 		// 先创建测试用户
-		for i := 0; i < concurrency; i++ {
-			err := createTestUser(db, userID+int64(i))
+		for i := 0; i < numGoroutines; i++ {
+			err := createTestUser(db, baseUserID+int64(i))
 			if err != nil {
 				t.Fatalf("创建测试用户失败: %v", err)
 			}
 		}
 
-		errors := make(chan error, concurrency)
-		keys := make(chan string, concurrency)
+		errors := make(chan error, numGoroutines)
+		keys := make(chan string, numGoroutines)
 
 		// 启动并发goroutines
-		for i := 0; i < concurrency; i++ {
+		for i := 0; i < numGoroutines; i++ {
 			go func(id int) {
-				apiKey, err := service.GenerateAPIKey(userID + int64(id))
+				apiKey, err := service.GenerateAPIKey(baseUserID + int64(id))
 				if err != nil {
 					errors <- err
 					return
@@ -331,36 +325,47 @@ func TestAPIKeyService_Concurrent(t *testing.T) {
 			}(i)
 		}
 
+		// 检查是否有错误
+		close(errors)
+		for err := range errors {
+			if err != nil {
+				t.Fatalf("并发生成API Key失败: %v", err)
+			}
+		}
+
 		// 收集结果
-		generatedKeys := make([]string, 0, concurrency)
-		for i := 0; i < concurrency; i++ {
+		generatedKeys := make([]string, 0, numGoroutines)
+		for i := 0; i < numGoroutines; i++ {
 			select {
-			case err := <-errors:
-				t.Errorf("并发生成API Key失败: %v", err)
 			case key := <-keys:
 				generatedKeys = append(generatedKeys, key)
 			case <-time.After(time.Second * 5):
-				t.Errorf("并发生成API Key超时")
+				t.Fatalf("等待API Key生成超时")
 			}
 		}
 
-		// 验证生成的Key都是唯一的
-		keySet := make(map[string]bool)
+		// 验证唯一性
+		keyMap := make(map[string]bool)
 		for _, key := range generatedKeys {
-			if keySet[key] {
+			if keyMap[key] {
 				t.Errorf("发现重复的API Key: %s", key)
 			}
-			keySet[key] = true
+			keyMap[key] = true
 		}
-
+		if len(generatedKeys) != numGoroutines {
+			t.Errorf("生成的API Key数量不正确: 期望 %d, 得到 %d", numGoroutines, len(generatedKeys))
+		}
 		t.Logf("✅ 并发生成 %d 个唯一的API Key", len(generatedKeys))
 	})
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		var userIDs []int64
+		for i := 0; i < numGoroutines; i++ {
+			userIDs = append(userIDs, int64(33333)+int64(i))
+		}
+		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
+		db.Where("id IN ?", userIDs).Delete(&User{})
 	})
 }
 
@@ -392,14 +397,17 @@ func BenchmarkAPIKeyService_ValidateFromCache(b *testing.B) {
 	}
 
 	b.ResetTimer()
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			_, err := service.ValidateAPIKey(apiKey)
-			if err != nil {
-				b.Errorf("验证API Key失败: %v", err)
-			}
+	for i := 0; i < b.N; i++ {
+		_, err := service.ValidateAPIKey(apiKey)
+		if err != nil {
+			b.Fatalf("验证API Key失败: %v", err)
 		}
+	}
+
+	// 清理
+	b.Cleanup(func() {
+		db.Where("user_id = ?", userID).Delete(&APIKey{})
+		db.Where("id = ?", userID).Delete(&User{})
 	})
 }
 
@@ -430,19 +438,17 @@ func TestAPIKeyService_DatabaseFallback(t *testing.T) {
 	// 验证API Key（应该从数据库查询）
 	validatedKey, err := service.ValidateAPIKey(apiKey)
 	if err != nil {
-		t.Fatalf("数据库回退验证失败: %v", err)
+		t.Fatalf("从数据库验证失败: %v", err)
 	}
 
 	if validatedKey.UserID != userID {
 		t.Errorf("数据库回退验证后的用户ID不匹配")
 	}
-
 	t.Logf("✅ 数据库回退机制正常工作")
 
-	// 清理测试数据
+	// 清理
 	t.Cleanup(func() {
-		db.Where("1 = 1").Delete(&APIKey{})
-		db.Where("1 = 1").Delete(&User{})
-		rdb.FlushDB(context.Background())
+		db.Where("user_id = ?", userID).Delete(&APIKey{})
+		db.Where("id = ?", userID).Delete(&User{})
 	})
 }
