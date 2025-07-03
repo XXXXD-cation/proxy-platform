@@ -3,9 +3,11 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -239,11 +241,40 @@ func WithError(err error) *logrus.Entry {
 	return Get().WithError(err)
 }
 
+// validateLogConfigPath 验证日志配置文件路径，防止路径遍历攻击
+func validateLogConfigPath(configPath string) error {
+	// 清理路径
+	cleanPath := filepath.Clean(configPath)
+
+	// 检查是否包含路径遍历字符
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("日志配置文件路径不安全: %s", configPath)
+	}
+
+	// 获取绝对路径
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("获取绝对路径失败: %v", err)
+	}
+
+	// 检查文件扩展名
+	if !strings.HasSuffix(absPath, ".yaml") && !strings.HasSuffix(absPath, ".yml") {
+		return fmt.Errorf("日志配置文件必须是YAML格式: %s", configPath)
+	}
+
+	return nil
+}
+
 // LoadConfigFromFile 从文件加载日志配置
 func LoadConfigFromFile(configPath string) (LogConfig, error) {
 	var config LogConfig
 
-	data, err := os.ReadFile(configPath)
+	// 验证配置文件路径安全性
+	if err := validateLogConfigPath(configPath); err != nil {
+		return config, err
+	}
+
+	data, err := os.ReadFile(configPath) // #nosec G304 - path已经过安全验证
 	if err != nil {
 		return config, err
 	}

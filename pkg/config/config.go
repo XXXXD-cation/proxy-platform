@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -65,15 +66,44 @@ type LogConfig struct {
 
 var globalConfig *Config
 
+// validateConfigPath 验证配置文件路径，防止路径遍历攻击
+func validateConfigPath(configPath string) error {
+	// 清理路径
+	cleanPath := filepath.Clean(configPath)
+
+	// 检查是否包含路径遍历字符
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("配置文件路径不安全: %s", configPath)
+	}
+
+	// 获取绝对路径
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("获取绝对路径失败: %v", err)
+	}
+
+	// 检查文件扩展名
+	if !strings.HasSuffix(absPath, ".yaml") && !strings.HasSuffix(absPath, ".yml") {
+		return fmt.Errorf("配置文件必须是YAML格式: %s", configPath)
+	}
+
+	return nil
+}
+
 // Load 加载配置文件
 func Load(configPath string) (*Config, error) {
+	// 验证配置文件路径安全性
+	if err := validateConfigPath(configPath); err != nil {
+		return nil, err
+	}
+
 	// 检查文件是否存在
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("配置文件不存在: %s", configPath)
 	}
 
 	// 读取配置文件
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) // #nosec G304 - path已经过安全验证
 	if err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %v", err)
 	}

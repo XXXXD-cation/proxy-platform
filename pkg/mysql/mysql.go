@@ -87,7 +87,9 @@ func NewClient(config *Config) (*Client, error) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("MySQL连接测试失败: %v, 关闭连接失败: %v", err, closeErr)
+		}
 		return nil, fmt.Errorf("MySQL连接测试失败: %v", err)
 	}
 
