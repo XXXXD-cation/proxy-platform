@@ -4,6 +4,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -92,7 +93,10 @@ type APIKey struct {
 	UserID      uint           `gorm:"not null;index" json:"user_id"`
 	APIKey      string         `gorm:"type:varchar(64);uniqueIndex;not null" json:"api_key"`
 	Name        string         `gorm:"type:varchar(100);default:'Default Key'" json:"name"`
-	Permissions map[string]any `gorm:"type:json" json:"permissions"`
+	KeyID       string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"key_id"`
+	KeyHash     string         `gorm:"type:varchar(64);not null" json:"key_hash"`
+	Prefix      string         `gorm:"type:varchar(20);not null" json:"prefix"`
+	Permissions datatypes.JSON `json:"permissions"`
 	IsActive    bool           `gorm:"default:true;index" json:"is_active"`
 	ExpiresAt   *time.Time     `json:"expires_at"`
 	LastUsedAt  *time.Time     `json:"last_used_at"`

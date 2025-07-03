@@ -100,6 +100,7 @@ func getTableDefinitions() []struct {
 		{"subscriptions", getSubscriptionsTableSQL()},
 		{"usage_logs", getUsageLogsTableSQL()},
 		{"proxy_ips", getProxyIPsTableSQL()},
+		{"proxy_health_checks", getProxyHealthChecksTableSQL()},
 	}
 }
 
@@ -114,9 +115,11 @@ func getUsersTableSQL() string {
 			status ENUM('active','suspended','deleted') DEFAULT 'active',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
 			INDEX idx_username (username),
 			INDEX idx_email (email),
-			INDEX idx_status (status)
+			INDEX idx_status (status),
+			INDEX idx_deleted_at (deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 }
@@ -134,10 +137,12 @@ func getAPIKeysTableSQL() string {
 			last_used_at TIMESTAMP NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			INDEX idx_api_key (api_key),
 			INDEX idx_user_id (user_id),
-			INDEX idx_is_active (is_active)
+			INDEX idx_is_active (is_active),
+			INDEX idx_deleted_at (deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 }
@@ -156,11 +161,13 @@ func getSubscriptionsTableSQL() string {
 			is_active BOOLEAN DEFAULT TRUE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			INDEX idx_user_id (user_id),
 			INDEX idx_plan_type (plan_type),
 			INDEX idx_expires_at (expires_at),
-			INDEX idx_is_active (is_active)
+			INDEX idx_is_active (is_active),
+			INDEX idx_deleted_at (deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 }
@@ -178,12 +185,14 @@ func getUsageLogsTableSQL() string {
 			traffic_bytes BIGINT DEFAULT 0,
 			latency_ms INT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL,
 			INDEX idx_user_id (user_id),
 			INDEX idx_created_at (created_at),
 			INDEX idx_target_domain (target_domain),
-			INDEX idx_proxy_ip (proxy_ip)
+			INDEX idx_proxy_ip (proxy_ip),
+			INDEX idx_deleted_at (deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 }
@@ -205,13 +214,36 @@ func getProxyIPsTableSQL() string {
 			last_checked_at TIMESTAMP NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
 			UNIQUE KEY uk_ip_port (ip_address, port),
 			INDEX idx_proxy_type (proxy_type),
 			INDEX idx_source_type (source_type),
 			INDEX idx_provider (provider),
 			INDEX idx_country_code (country_code),
 			INDEX idx_quality_score (quality_score),
-			INDEX idx_is_active (is_active)
+			INDEX idx_is_active (is_active),
+			INDEX idx_deleted_at (deleted_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+	`
+}
+
+func getProxyHealthChecksTableSQL() string {
+	return `
+		CREATE TABLE IF NOT EXISTS proxy_health_checks (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			proxy_ip_id BIGINT NOT NULL,
+			check_type VARCHAR(20) NOT NULL,
+			is_success BOOLEAN,
+			latency_ms INT,
+			error_msg TEXT,
+			checked_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
+			FOREIGN KEY (proxy_ip_id) REFERENCES proxy_ips(id) ON DELETE CASCADE,
+			INDEX idx_proxy_ip_id (proxy_ip_id),
+			INDEX idx_check_type (check_type),
+			INDEX idx_checked_at (checked_at),
+			INDEX idx_deleted_at (deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 }
@@ -231,6 +263,7 @@ func migrateDown(dsn string) {
 
 	tables := []string{
 		"usage_logs",
+		"proxy_health_checks",
 		"proxy_ips",
 		"subscriptions",
 		"api_keys",
