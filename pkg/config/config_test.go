@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/XXXXD-cation/proxy-platform/pkg/logger"
 )
 
 func TestLoad(t *testing.T) {
@@ -161,7 +163,7 @@ func TestConfigValidate(t *testing.T) {
 			Host: "localhost",
 			Port: 6379,
 		},
-		Log: LogConfig{
+		Log: logger.LogConfig{
 			Level:  "info",
 			Format: "json",
 		},

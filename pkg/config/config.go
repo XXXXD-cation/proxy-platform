@@ -7,15 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/XXXXD-cation/proxy-platform/pkg/logger"
 	"gopkg.in/yaml.v3"
 )
 
 // Config 应用程序配置结构
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Redis    RedisConfig    `yaml:"redis"`
-	Log      LogConfig      `yaml:"log"`
+	Server    ServerConfig     `yaml:"server"`
+	Database  DatabaseConfig   `yaml:"database"`
+	Redis     RedisConfig      `yaml:"redis"`
+	Log       logger.LogConfig `yaml:"log"`
+	ProxyPool ProxyPoolConfig  `yaml:"proxy_pool"`
 }
 
 // ServerConfig 服务器配置
@@ -52,16 +54,21 @@ type RedisConfig struct {
 	DialTimeout int    `yaml:"dial_timeout"`
 }
 
-// LogConfig 日志配置
-type LogConfig struct {
-	Level      string `yaml:"level"`
-	Format     string `yaml:"format"`
-	Output     string `yaml:"output"`
-	Filename   string `yaml:"filename"`
-	MaxSize    int    `yaml:"max_size"`
-	MaxAge     int    `yaml:"max_age"`
-	MaxBackups int    `yaml:"max_backups"`
-	Compress   bool   `yaml:"compress"`
+// ProxyPoolConfig 代理池服务配置
+type ProxyPoolConfig struct {
+	Providers ProviderConfigs `yaml:"providers"`
+}
+
+// ProviderConfigs 代理提供商配置
+type ProviderConfigs struct {
+	Webshare WebshareConfig `yaml:"webshare"`
+	// 在此可以添加其他提供商，例如 BrightData, Oxylabs等
+}
+
+// WebshareConfig Webshare提供商特定配置
+type WebshareConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	APIKey  string `yaml:"api_key"`
 }
 
 var globalConfig *Config

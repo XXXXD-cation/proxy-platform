@@ -1,10 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/XXXXD-cation/proxy-platform/pkg/config"
+	"github.com/XXXXD-cation/proxy-platform/pkg/logger"
 )
 
 const (
@@ -17,14 +19,24 @@ const (
 )
 
 func main() {
-	// 代理池服务 - 基础骨架
-	fmt.Println("🚀 Proxy Pool Service starting...")
+	// 加载配置
+	cfg, err := config.LoadFromDir("configs", "proxy-pool")
+	if err != nil {
+		log.Fatalf("❌ Failed to load configuration: %v", err)
+	}
+
+	// 初始化日志记录器
+	if err := logger.Init(&cfg.Log); err != nil {
+		log.Fatalf("❌ Failed to initialize logger: %v", err)
+	}
+
+	logger.Info("🚀 Proxy Pool Service starting...")
 
 	// 简单的健康检查端点
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"status":"ok","service":"proxy-pool"}`)); err != nil {
-			log.Printf("Failed to write response: %v", err)
+			logger.WithField("error", err).Warn("Failed to write health check response")
 		}
 	})
 
@@ -32,7 +44,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"message":"Proxy Pool Service","version":"1.0.0"}`)); err != nil {
-			log.Printf("Failed to write response: %v", err)
+			logger.WithField("error", err).Warn("Failed to write root response")
 		}
 	})
 
@@ -41,19 +53,20 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		response := `{"proxies":[],"total":0,"message":"Service ready for proxy pool management"}`
 		if _, err := w.Write([]byte(response)); err != nil {
-			log.Printf("Failed to write response: %v", err)
+			logger.WithField("error", err).Warn("Failed to write proxies API response")
 		}
 	})
 
-	fmt.Println("🎯 Proxy Pool server listening on :8081")
+	addr := cfg.GetServerAddr()
+	logger.Infof("🎯 Proxy Pool server listening on %s", addr)
 
 	// 配置HTTP服务器的超时设置
 	server := &http.Server{
-		Addr:         ":8081",
+		Addr:         addr,
 		ReadTimeout:  ServerReadTimeout,
 		WriteTimeout: ServerWriteTimeout,
 		IdleTimeout:  ServerIdleTimeout,
 	}
 
-	log.Fatal(server.ListenAndServe())
+	logger.Fatal(server.ListenAndServe())
 }
