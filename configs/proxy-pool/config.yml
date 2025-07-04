@@ -1,0 +1,7 @@
+# 代理池服务 (proxy-pool) 配置
+
+proxy_pool:
+  providers:
+    webshare:
+      enabled: true
+      api_key: "7a1vgwyukh8kf9zy9qx5557inn9sr0fdtle5odsx" 
