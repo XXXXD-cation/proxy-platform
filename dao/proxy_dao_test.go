@@ -2,6 +2,7 @@ package dao_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ func getTestDB() (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Silent), // 关闭日志输出
 		DisableForeignKeyConstraintWhenMigrating: true,                                  // 禁用外键约束检查
+		SkipDefaultTransaction:                   true,                                  // 跳过默认事务，提高测试性能并避免事务隔离问题
 	})
 	if err != nil {
 		return nil, err
@@ -604,9 +606,11 @@ func (s *UsageLogDAOTestSuite) TearDownSuite() {
 // SetupTest 每个测试前的设置
 func (s *UsageLogDAOTestSuite) SetupTest() {
 	// 清理测试数据
+	s.db.Exec("SET FOREIGN_KEY_CHECKS = 0")
 	s.db.Unscoped().Delete(&models.UsageLog{}, "1 = 1")
 	s.db.Unscoped().Delete(&models.APIKey{}, "1 = 1")
 	s.db.Unscoped().Delete(&models.User{}, "1 = 1")
+	s.db.Exec("SET FOREIGN_KEY_CHECKS = 1")
 
 	// 创建测试用户
 	s.testUser = &models.User{
@@ -616,7 +620,9 @@ func (s *UsageLogDAOTestSuite) SetupTest() {
 		SubscriptionPlan: models.PlanDeveloper,
 		Status:           models.UserStatusActive,
 	}
-	s.NoError(s.db.Create(s.testUser).Error)
+	err := s.db.Create(s.testUser).Error
+	s.Require().NoError(err, "创建测试用户失败")
+	s.Require().NotEqual(uint(0), s.testUser.ID, "用户ID不应为0")
 
 	// 创建测试API密钥
 	permissions := datatypes.JSON(`{"read": true, "write": false}`)
@@ -630,7 +636,9 @@ func (s *UsageLogDAOTestSuite) SetupTest() {
 		Permissions: permissions,
 		IsActive:    true,
 	}
-	s.NoError(s.db.Create(s.testAPIKey).Error)
+	err = s.db.Create(s.testAPIKey).Error
+	s.Require().NoError(err, "创建测试API Key失败")
+	s.Require().NotEqual(uint(0), s.testAPIKey.ID, "API Key ID不应为0")
 }
 
 // TestUsageLogDAO_Create 测试创建使用日志
@@ -666,7 +674,7 @@ func (s *UsageLogDAOTestSuite) TestUsageLogDAO_GetByUserID() {
 			APIKeyID:      &s.testAPIKey.ID,
 			RequestMethod: "GET",
 			TargetDomain:  "example.com",
-			ProxyIP:       "192.168.1." + string(rune(i+1+'0')),
+			ProxyIP:       fmt.Sprintf("192.168.1.%d", i+1),
 			ResponseCode:  200,
 			TrafficBytes:  1024 * int64(i+1),
 			LatencyMs:     150 + i*10,

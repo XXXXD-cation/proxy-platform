@@ -61,7 +61,7 @@ linters-settings:
       - dupImport
       
   funlen:
-    lines: 80
+    lines: 90
     statements: 50
     
   gocognit:

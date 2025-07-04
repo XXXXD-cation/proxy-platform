@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,18 +141,20 @@ func TestAPIKeyService_Validation(t *testing.T) {
 	// --- 设置测试用户 ---
 	userID1 := int64(54321)
 	userID2 := int64(22222)
-	userIDs := []int64{userID1, userID2}
 
-	for _, id := range userIDs {
-		if err := createTestUser(db, id); err != nil {
-			t.Fatalf("创建测试用户 %d 失败: %v", id, err)
-		}
+	// 先创建测试用户并确保成功
+	if err := createTestUser(db, userID1); err != nil {
+		t.Fatalf("创建测试用户 %d 失败: %v", userID1, err)
+	}
+	if err := createTestUser(db, userID2); err != nil {
+		t.Fatalf("创建测试用户 %d 失败: %v", userID2, err)
 	}
 
 	// --- 清理逻辑 ---
 	t.Cleanup(func() {
-		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
-		db.Where("id IN ?", userIDs).Delete(&User{})
+		// 先删除API Key，再删除用户
+		db.Where("user_id IN ?", []int64{userID1, userID2}).Delete(&APIKey{})
+		db.Where("id IN ?", []int64{userID1, userID2}).Delete(&User{})
 	})
 
 	// --- 测试有效的API Key ---
@@ -199,10 +202,32 @@ func TestAPIKeyService_Expiration(t *testing.T) {
 
 	userID := int64(10001)
 
-	// 先创建测试用户
-	err := createTestUser(db, userID)
-	if err != nil {
+	// 先清理可能存在的测试数据
+	db.Exec("SET FOREIGN_KEY_CHECKS = 0")
+	db.Where("user_id = ?", userID).Delete(&APIKey{})
+	db.Where("id = ?", userID).Delete(&User{})
+	db.Exec("SET FOREIGN_KEY_CHECKS = 1")
+
+	// 创建测试用户
+	user := &User{
+		ID:               userID,
+		Username:         fmt.Sprintf("testuser_%d", userID),
+		Email:            fmt.Sprintf("test%d@example.com", userID),
+		PasswordHash:     "hashed_password",
+		SubscriptionPlan: "developer",
+		Status:           "active",
+	}
+
+	// 直接创建用户记录
+	if err := db.Create(user).Error; err != nil {
 		t.Fatalf("创建测试用户失败: %v", err)
+	}
+
+	// 确认用户已创建
+	var count int64
+	db.Model(&User{}).Where("id = ?", userID).Count(&count)
+	if count == 0 {
+		t.Fatalf("创建用户失败，数据库中不存在ID为%d的用户", userID)
 	}
 
 	// 使用2秒过期时间，避免Redis的最小时间限制
@@ -234,8 +259,10 @@ func TestAPIKeyService_Expiration(t *testing.T) {
 
 	// 清理测试数据
 	t.Cleanup(func() {
+		db.Exec("SET FOREIGN_KEY_CHECKS = 0")
 		db.Where("user_id = ?", userID).Delete(&APIKey{})
 		db.Where("id = ?", userID).Delete(&User{})
+		db.Exec("SET FOREIGN_KEY_CHECKS = 1")
 	})
 }
 
@@ -303,48 +330,68 @@ func TestAPIKeyService_Concurrent(t *testing.T) {
 	numGoroutines := 10
 	baseUserID := int64(33333)
 
+	// 先清理可能存在的测试数据
+	var userIDs []int64
+	for i := 0; i < numGoroutines; i++ {
+		userIDs = append(userIDs, baseUserID+int64(i))
+	}
+	db.Exec("SET FOREIGN_KEY_CHECKS = 0")
+	db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
+	db.Where("id IN ?", userIDs).Delete(&User{})
+	db.Exec("SET FOREIGN_KEY_CHECKS = 1")
+
 	// 并发生成API Key
 	t.Run("并发生成API Key", func(t *testing.T) {
 		// 先创建测试用户
 		for i := 0; i < numGoroutines; i++ {
-			err := createTestUser(db, baseUserID+int64(i))
-			if err != nil {
-				t.Fatalf("创建测试用户失败: %v", err)
+			userID := baseUserID + int64(i)
+			user := &User{
+				ID:               userID,
+				Username:         fmt.Sprintf("testuser_%d", userID),
+				Email:            fmt.Sprintf("test%d@example.com", userID),
+				PasswordHash:     "hashed_password",
+				SubscriptionPlan: "developer",
+				Status:           "active",
+			}
+			if err := db.Create(user).Error; err != nil {
+				t.Fatalf("创建测试用户(ID=%d)失败: %v", userID, err)
 			}
 		}
 
-		errors := make(chan error, numGoroutines)
-		keys := make(chan string, numGoroutines)
+		// 使用WaitGroup和互斥锁确保并发安全
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		generatedKeys := make([]string, 0, numGoroutines)
+		errCount := 0
 
 		// 启动并发goroutines
 		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
 			go func(id int) {
-				apiKey, err := service.GenerateAPIKey(baseUserID + int64(id))
+				defer wg.Done()
+
+				userID := baseUserID + int64(id)
+				apiKey, err := service.GenerateAPIKey(userID)
+
+				mu.Lock()
+				defer mu.Unlock()
+
 				if err != nil {
-					errors <- err
+					t.Logf("并发生成API Key(用户ID=%d)失败: %v", userID, err)
+					errCount++
 					return
 				}
-				keys <- apiKey
+
+				generatedKeys = append(generatedKeys, apiKey)
 			}(i)
 		}
 
-		// 检查是否有错误
-		close(errors)
-		for err := range errors {
-			if err != nil {
-				t.Fatalf("并发生成API Key失败: %v", err)
-			}
-		}
+		// 等待所有goroutine完成
+		wg.Wait()
 
-		// 收集结果
-		generatedKeys := make([]string, 0, numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
-			select {
-			case key := <-keys:
-				generatedKeys = append(generatedKeys, key)
-			case <-time.After(time.Second * 5):
-				t.Fatalf("等待API Key生成超时")
-			}
+		// 检查结果
+		if errCount > 0 {
+			t.Errorf("有 %d 个API Key生成失败", errCount)
 		}
 
 		// 验证唯一性
@@ -355,20 +402,20 @@ func TestAPIKeyService_Concurrent(t *testing.T) {
 			}
 			keyMap[key] = true
 		}
+
 		if len(generatedKeys) != numGoroutines {
 			t.Errorf("生成的API Key数量不正确: 期望 %d, 得到 %d", numGoroutines, len(generatedKeys))
+		} else {
+			t.Logf("✅ 并发生成 %d 个唯一的API Key", len(generatedKeys))
 		}
-		t.Logf("✅ 并发生成 %d 个唯一的API Key", len(generatedKeys))
 	})
 
 	// 清理测试数据
 	t.Cleanup(func() {
-		var userIDs []int64
-		for i := 0; i < numGoroutines; i++ {
-			userIDs = append(userIDs, int64(33333)+int64(i))
-		}
+		db.Exec("SET FOREIGN_KEY_CHECKS = 0")
 		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
 		db.Where("id IN ?", userIDs).Delete(&User{})
+		db.Exec("SET FOREIGN_KEY_CHECKS = 1")
 	})
 }
 

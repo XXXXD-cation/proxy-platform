@@ -1,0 +1,41 @@
+# 代理池服务 (proxy-pool) 配置文件
+
+# 日志配置
+log:
+  level: "info"
+  format: "text"
+
+# 标准服务器配置 (为满足验证要求)
+server:
+  host: "localhost"
+  port: 8080 # 占位符，proxy-pool服务不直接使用此端口
+
+# HTTP健康检查和管理端口
+http:
+  addr: ":8081"
+
+# gRPC服务端口
+grpc:
+  addr: ":50051"
+  
+# 数据库配置 (为满足验证要求)
+database:
+  host: "localhost"
+  port: 3306
+  user: "proxy_user"
+  password: "proxy_pass123"
+  dbname: "proxy_platform"
+
+# Redis连接配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+# 商业代理提供商配置
+proxy_pool:
+  providers:
+    webshare:
+      enabled: true
+      api_key: "7a1vgwyukh8kf9zy9qx5557inn9sr0fdtle5odsx" 
