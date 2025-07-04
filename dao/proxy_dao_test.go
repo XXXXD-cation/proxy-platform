@@ -784,12 +784,23 @@ func (s *UsageLogDAOTestSuite) TestUsageLogDAO_GetTodayStats() {
 
 // TestUsageLogDAO_GetMonthlyStats 测试获取本月统计
 func (s *UsageLogDAOTestSuite) TestUsageLogDAO_GetMonthlyStats() {
+	// 为此测试专门创建一个API Key，避免状态依赖问题
+	apiKey := &models.APIKey{
+		UserID:   s.testUser.ID,
+		APIKey:   "monthly-stats-test-api-key-full",
+		KeyID:    "monthly-stats-test",
+		KeyHash:  "hashed-key", // 在测试场景下，哈希值可以简化
+		Prefix:   "test",
+		IsActive: true,
+	}
+	s.NoError(s.db.Create(apiKey).Error)
+
 	// 创建本月数据
 	now := time.Now()
 	for i := 0; i < 3; i++ {
 		usageLog := &models.UsageLog{
 			UserID:        s.testUser.ID,
-			APIKeyID:      &s.testAPIKey.ID,
+			APIKeyID:      &apiKey.ID,
 			RequestMethod: "GET",
 			TargetDomain:  "example.com",
 			ProxyIP:       "192.168.1.1",
@@ -805,7 +816,7 @@ func (s *UsageLogDAOTestSuite) TestUsageLogDAO_GetMonthlyStats() {
 	lastMonth := now.AddDate(0, -1, -1)
 	usageLog := &models.UsageLog{
 		UserID:        s.testUser.ID,
-		APIKeyID:      &s.testAPIKey.ID,
+		APIKeyID:      &apiKey.ID,
 		RequestMethod: "GET",
 		TargetDomain:  "example.com",
 		ProxyIP:       "192.168.1.1",

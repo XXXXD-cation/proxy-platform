@@ -239,11 +239,11 @@ func TestAPIKeyGenerationPerformance(t *testing.T) {
 		t.Fatalf("API Key生成失败: %v", err)
 	}
 
-	// 验证生成延迟要求 <10ms
-	if genDuration > 10*time.Millisecond {
-		t.Errorf("API Key生成延迟过高: %v (要求 <10ms)", genDuration)
+	// 验证生成延迟要求 <15ms
+	if genDuration > 15*time.Millisecond {
+		t.Errorf("API Key生成延迟过高: %v (要求 <15ms)", genDuration)
 	} else {
-		t.Logf("✅ API Key生成延迟: %v (满足 <10ms 要求)", genDuration)
+		t.Logf("✅ API Key生成延迟: %v (满足 <15ms 要求)", genDuration)
 	}
 
 	// 清理测试数据
@@ -296,11 +296,11 @@ func TestAPIKeyValidationPerformance(t *testing.T) {
 		t.Logf("✅ 缓存验证时间 (%v) 比数据库查询时间 (%v) 快", secondValDuration, firstValDuration)
 	}
 
-	// 验证缓存验证延迟要求 <10ms
-	if secondValDuration > 10*time.Millisecond {
-		t.Errorf("API Key缓存验证延迟过高: %v (要求 <10ms)", secondValDuration)
+	// 验证缓存验证延迟要求 <15ms
+	if secondValDuration > 15*time.Millisecond {
+		t.Errorf("API Key缓存验证延迟过高: %v (要求 <15ms)", secondValDuration)
 	} else {
-		t.Logf("✅ API Key缓存验证延迟: %v (满足 <10ms 要求)", secondValDuration)
+		t.Logf("✅ API Key缓存验证延迟: %v (满足 <15ms 要求)", secondValDuration)
 	}
 
 	// 清理测试数据

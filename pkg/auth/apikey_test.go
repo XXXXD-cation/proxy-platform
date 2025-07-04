@@ -164,28 +164,58 @@ func TestAPIKeyService_Validation(t *testing.T) {
 	rdb := setupTestRedis(t)
 	service := NewAPIKeyService(rdb, db)
 
-	// 验证有效的API Key
-	userID := int64(54321)
-	testAPIKeyValidation(t, service, db, userID, "成功验证API Key")
+	// --- 设置测试用户 ---
+	userID1 := int64(54321)
+	userID2 := int64(22222)
+	userIDs := []int64{userID1, userID2}
 
-	// 验证无效的API Key
+	for _, id := range userIDs {
+		if err := createTestUser(db, id); err != nil {
+			t.Fatalf("创建测试用户 %d 失败: %v", id, err)
+		}
+	}
+
+	// --- 清理逻辑 ---
+	t.Cleanup(func() {
+		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
+		db.Where("id IN ?", userIDs).Delete(&User{})
+	})
+
+	// --- 测试有效的API Key ---
+	apiKey1, err := service.GenerateAPIKey(userID1)
+	if err != nil {
+		t.Fatalf("为用户 %d 生成API Key失败: %v", userID1, err)
+	}
+	validatedKey1, err := service.ValidateAPIKey(apiKey1)
+	if err != nil {
+		t.Fatalf("验证用户 %d 的API Key失败: %v", userID1, err)
+	}
+	if validatedKey1.UserID != userID1 {
+		t.Errorf("验证后的用户ID不匹配: 期望 %d, 得到 %d", userID1, validatedKey1.UserID)
+	}
+	t.Logf("✅ 成功验证API Key")
+
+	// --- 测试无效的API Key ---
 	invalidKey := "invalid-api-key"
-	_, err := service.ValidateAPIKey(invalidKey)
+	_, err = service.ValidateAPIKey(invalidKey)
 	if err == nil {
 		t.Errorf("应该拒绝无效的API Key")
 	}
 	t.Logf("✅ 正确拒绝无效的API Key")
 
-	// 权限验证
-	userID2 := int64(22222)
-	testAPIKeyValidation(t, service, db, userID2, "权限验证正确")
-
-	// 清理测试数据
-	t.Cleanup(func() {
-		userIDs := []int64{userID, userID2}
-		db.Where("user_id IN ?", userIDs).Delete(&APIKey{})
-		db.Where("id IN ?", userIDs).Delete(&User{})
-	})
+	// --- 权限验证 ---
+	apiKey2, err := service.GenerateAPIKey(userID2)
+	if err != nil {
+		t.Fatalf("为用户 %d 生成API Key失败: %v", userID2, err)
+	}
+	validatedKey2, err := service.ValidateAPIKey(apiKey2)
+	if err != nil {
+		t.Fatalf("验证用户 %d 的API Key失败: %v", userID2, err)
+	}
+	if validatedKey2.UserID != userID2 {
+		t.Errorf("权限验证后用户ID不匹配: 期望 %d, 得到 %d", userID2, validatedKey2.UserID)
+	}
+	t.Logf("✅ 权限验证正确")
 }
 
 // TestAPIKeyService_Expiration API Key过期测试
