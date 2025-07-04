@@ -87,33 +87,6 @@ func setupTestRedis(t *testing.T) *redis.Client {
 	return rdb
 }
 
-// 通用API Key验证测试辅助函数
-func testAPIKeyValidation(t *testing.T, service *APIKeyService, db *gorm.DB, userID int64, testName string) {
-	// 先创建测试用户
-	err := createTestUser(db, userID)
-	if err != nil {
-		t.Fatalf("创建测试用户失败: %v", err)
-	}
-
-	// 生成API Key
-	apiKey, err := service.GenerateAPIKey(userID)
-	if err != nil {
-		t.Fatalf("生成API Key失败: %v", err)
-	}
-
-	// 验证API Key
-	validatedKey, err := service.ValidateAPIKey(apiKey)
-	if err != nil {
-		t.Fatalf("验证API Key失败: %v", err)
-	}
-
-	if validatedKey.UserID != userID {
-		t.Errorf("验证后的用户ID不匹配: 期望 %d, 得到 %d", userID, validatedKey.UserID)
-	}
-
-	t.Logf("✅ %s", testName)
-}
-
 // TestAPIKeyService_Integration 集成测试
 // TestAPIKeyService_Generation API Key生成测试
 func TestAPIKeyService_Generation(t *testing.T) {
